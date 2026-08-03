@@ -1,0 +1,19 @@
+name: Deploy to Deno Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno install -gArf jsr:@deno/deployctl
+      - run: deployctl deploy --project=zafei-portal --entrypoint=deno_serve.ts --include=deno_serve.ts,public,deno.json --prod
+        env:
+          DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
