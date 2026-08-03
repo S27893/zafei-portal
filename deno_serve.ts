@@ -1,6 +1,7 @@
 // 云端门户网关 — Deno Deploy 版（替代 Netlify Functions）
 // 同时提供 API (/api) 和静态文件 (public/)
 // 逻辑与 netlify/functions/api.mjs 完全一致，仅入口格式适配 Deno.serve()
+// v1.0.1 — trigger GitHub integration deployment
 
 import { serveDir } from "https://deno.land/std@0.224.0/http/file_server.ts";
 
