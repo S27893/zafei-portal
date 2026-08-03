@@ -1,0 +1,11 @@
+{
+  "tasks": {
+    "start": "deno run -A --watch deno_serve.ts"
+  },
+  "deploy": {
+    "entrypoint": "deno_serve.ts",
+    "include": [
+      "public"
+    ]
+  }
+}
