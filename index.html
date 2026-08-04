@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>杂费加收云端处理门户</title>
+<meta name="description" content="4PX 杂费加收云端处理门户：随时发起处理、查看进度、下载结果文件。">
+<link rel="icon" type="image/png" href="images/logo.png">
+<style>
+/* ============ 设计系统令牌 ============ */
+:root {
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-soft: #eff6ff;
+  --primary-soft-border: #bfdbfe;
+  --success: #16a34a;
+  --success-soft: #f0fdf4;
+  --success-border: #bbf7d0;
+  --warn: #d97706;
+  --warn-soft: #fffbeb;
+  --warn-border: #fde68a;
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --danger-border: #fecaca;
+  --info: #0891b2;
+  --info-soft: #ecfeff;
+  --info-border: #a5f3fc;
+  --terminal-bg: #0f172a;
+  --terminal-text: #a5f3a5;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow-card: 0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04);
+  --shadow-pop: 0 20px 50px -12px rgba(15,23,42,.25);
+  --gradient-brand: linear-gradient(135deg, #3b82f6, #2563eb);
+  --transition: all .18s cubic-bezier(.4,0,.2,1);
+  --font: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+  --mono: "SF Mono", Consolas, "Courier New", monospace;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { font-size:14px; }
+body { font-family:var(--font); background:var(--bg); color:var(--text); line-height:1.55; }
+button { font-family:var(--font); cursor:pointer; }
+input, select { font-family:var(--font); }
+
+/* ============ 布局 ============ */
+.container { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+.topbar {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 50;
+}
+.topbar-inner { display:flex; align-items:center; gap:12px; height:60px; }
+.topbar img.logo { width:34px; height:34px; border-radius:8px; }
+.topbar .title { font-size:16px; font-weight:700; letter-spacing:.2px; }
+.topbar .sub { font-size:12px; color:var(--text-3); margin-top:-2px; }
+.topbar .spacer { flex:1; }
+
+/* Agent 状态 */
+.agent-pill {
+  display:inline-flex; align-items:center; gap:7px; padding:6px 13px;
+  border-radius:999px; font-size:12.5px; font-weight:600;
+  border:1px solid var(--border); background:var(--surface-2); color:var(--text-2);
+  transition:var(--transition);
+}
+.agent-pill .dot { width:8px; height:8px; border-radius:50%; background:var(--text-3); }
+.agent-pill.online { background:var(--success-soft); border-color:var(--success-border); color:var(--success); }
+.agent-pill.online .dot { background:var(--success); box-shadow:0 0 0 3px rgba(22,163,74,.15); animation:pulse 2s infinite; }
+.agent-pill.offline { background:var(--danger-soft); border-color:var(--danger-border); color:var(--danger); }
+.agent-pill.offline .dot { background:var(--danger); }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 3px rgba(22,163,74,.15)} 50%{box-shadow:0 0 0 6px rgba(22,163,74,.06)} }
+
+.user-chip { font-size:12.5px; color:var(--text-2); background:var(--surface-2); border:1px solid var(--border); padding:6px 12px; border-radius:999px; }
+.user-chip b { color:var(--text); }
+
+/* ============ 登录门 ============ */
+.gate {
+  position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center;
+  background:
+    radial-gradient(800px 400px at 20% -10%, rgba(59,130,246,.10), transparent),
+    radial-gradient(700px 400px at 90% 110%, rgba(37,99,235,.08), transparent),
+    var(--bg);
+}
+.gate-card {
+  width: 460px; max-width: calc(100vw - 32px);
+  background: var(--surface); border:1px solid var(--border); border-radius:16px;
+  box-shadow: var(--shadow-pop); padding: 32px 34px 28px; text-align:center;
+  animation: rise .35s cubic-bezier(.2,.8,.3,1);
+}
+.gate-grid { display:grid; grid-template-columns:1fr 1fr; gap:0 12px; }
+.field label .opt { font-weight:400; color:var(--text-3); font-size:11px; }
+@keyframes rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+.gate-card img { width:64px; height:64px; border-radius:16px; margin-bottom:14px; }
+.gate-card h1 { font-size:19px; font-weight:700; }
+.gate-card p.desc { color:var(--text-3); font-size:12.5px; margin:6px 0 22px; }
+.field { text-align:left; margin-bottom:14px; }
+.field label { display:block; font-size:12.5px; font-weight:600; color:var(--text-2); margin-bottom:6px; }
+.field input {
+  width:100%; padding:10px 13px; border:1px solid var(--border-strong); border-radius:var(--radius-sm);
+  font-size:14px; outline:none; transition:var(--transition); background:var(--surface);
+}
+.field input:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+.gate-err { color:var(--danger); font-size:12.5px; min-height:18px; margin-bottom:8px; text-align:left; }
+
+/* ============ 按钮 ============ */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  border:none; border-radius:var(--radius-sm); font-weight:600; font-size:14px;
+  padding:10px 18px; transition:var(--transition); white-space:nowrap;
+}
+.btn-primary { background:var(--gradient-brand); color:#fff; box-shadow:0 2px 8px rgba(37,99,235,.25); }
+.btn-primary:hover { filter:brightness(1.06); box-shadow:0 4px 14px rgba(37,99,235,.35); transform:translateY(-1px); }
+.btn-primary:disabled { opacity:.55; cursor:not-allowed; transform:none; box-shadow:none; }
+.btn-block { width:100%; padding:12px; font-size:15px; }
+.btn-ghost { background:var(--surface); color:var(--text-2); border:1px solid var(--border-strong); }
+.btn-ghost:hover { background:var(--surface-2); color:var(--text); }
+.btn-sm { padding:6px 12px; font-size:12.5px; border-radius:7px; }
+.btn-dl { background:var(--primary-soft); color:var(--primary); border:1px solid var(--primary-soft-border); }
+.btn-dl:hover { background:#dbeafe; }
+.btn-up { background:var(--gradient-brand); color:#fff; border:none; }
+.btn-up:disabled { opacity:.5; cursor:not-allowed; }
+.btn-up.orange { background:linear-gradient(135deg,#f59e0b,#d97706); }
+.act-head {
+  padding:10px 14px; border-radius:var(--radius-sm); font-size:13px; font-weight:600;
+  border:1px solid var(--border); background:var(--surface-2); margin-bottom:8px;
+}
+.act-head.ok { background:var(--success-soft); border-color:var(--success-border); color:var(--success); }
+.act-head.bad { background:var(--danger-soft); border-color:var(--danger-border); color:var(--danger); }
+.act-head.run { background:var(--primary-soft); border-color:var(--primary-soft-border); color:var(--primary); }
+
+/* ============ 主体卡片 ============ */
+main.container { padding-top:24px; padding-bottom:60px; }
+.card {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow-card); margin-bottom:20px; overflow:hidden;
+}
+.card-head { padding:16px 22px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+.card-head h2 { font-size:15px; font-weight:700; }
+.card-head .hint { font-size:12px; color:var(--text-3); }
+.card-body { padding:22px; }
+
+/* 板块选择 */
+.type-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:18px; }
+@media (max-width:760px){ .type-grid { grid-template-columns:repeat(3,1fr); } }
+.reg-note {
+  display:none; margin-bottom:14px; padding:12px 15px; border-radius:var(--radius-sm);
+  background:var(--info-soft); border:1px solid var(--info-border); color:var(--info); font-size:13px;
+}
+.reg-auth-row { display:flex; align-items:center; gap:12px; margin-top:10px; flex-wrap:wrap; }
+.reg-auth-row #regAuthStatus { font-weight:700; }
+.reg-auth-row #regAuthStatus.ok { color:var(--success); }
+.reg-auth-row #regAuthStatus.no { color:var(--warn); }
+.reg-bm-setup {
+  margin-top:10px; padding:10px 13px; border-radius:var(--radius-sm); line-height:1.9;
+  background:var(--surface); border:1px dashed var(--info-border); color:var(--text-2); font-size:12.5px;
+}
+.reg-bm-setup a { color:var(--primary); }
+
+/* 处理统计卡片 */
+.stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:16px; }
+@media (max-width:560px){ .stat-grid { grid-template-columns:repeat(2,1fr); } }
+.stat-card {
+  border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface-2);
+  padding:12px 10px; text-align:center;
+}
+.stat-card .sl { font-size:12px; color:var(--text-2); font-weight:600; margin-bottom:6px; }
+.stat-card .sv { font-size:22px; font-weight:800; color:var(--text); }
+.stat-card .sv.blue { color:var(--primary); }
+.stat-card .sv.green { color:var(--success); }
+.stat-card .sv.dim { color:var(--warn); }
+.warn-list {
+  margin-top:8px; padding:10px 14px; border-radius:var(--radius-sm);
+  background:var(--warn-soft); border:1px solid var(--warn-border); color:var(--text-2);
+  font-size:12px; max-height:260px; overflow-y:auto; word-break:break-all;
+}
+.warn-list .w-item { padding:5px 0; border-bottom:1px dashed var(--warn-border); line-height:1.5; }
+.warn-list .w-item:last-child { border-bottom:none; }
+.warn-toolbar {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px;
+  font-size:13px; font-weight:700; color:var(--warn);
+}
+.warn-toolbar .wt-info { font-weight:400; color:var(--text-2); font-size:12.5px; }
+.warn-toolbar .spacer { flex:1; }
+.btn-page {
+  padding:4px 11px; font-size:12px; border-radius:6px; border:1px solid var(--warn-border);
+  background:var(--surface); color:var(--text-2);
+}
+.btn-page:hover:not(:disabled) { background:var(--warn-soft); color:var(--warn); }
+.btn-page:disabled { opacity:.4; cursor:not-allowed; }
+
+/* 页签导航 */
+.nav-tabs { display:flex; gap:6px; margin:20px 0 4px; border-bottom:1px solid var(--border); }
+.nav-tab {
+  padding:10px 20px; font-size:14px; font-weight:600; border:none; background:none;
+  color:var(--text-2); border-bottom:2px solid transparent; margin-bottom:-1px; transition:var(--transition); cursor:pointer;
+}
+.nav-tab:hover { color:var(--primary); }
+.nav-tab.active { color:var(--primary); border-bottom-color:var(--primary); }
+
+/* 配置管理 */
+.cfg-tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.cfg-tab {
+  padding:7px 14px; font-size:13px; font-weight:600; border-radius:8px;
+  border:1.5px solid var(--border); background:var(--surface); color:var(--text-2);
+  transition:var(--transition);
+}
+.cfg-tab:hover { border-color:var(--primary-soft-border); background:var(--primary-soft); }
+.cfg-tab.active { border-color:var(--primary); background:var(--primary-soft); color:var(--primary); }
+.cfg-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.cfg-status { font-size:12.5px; color:var(--text-3); }
+.cfg-table-wrap { overflow:auto; max-height:480px; border:1px solid var(--border); border-radius:var(--radius-sm); }
+.cfg-table { width:100%; border-collapse:collapse; font-size:13px; }
+.cfg-table th {
+  position:sticky; top:0; background:var(--surface-2); z-index:2;
+  padding:8px 12px; text-align:left; font-size:12px; color:var(--text-2);
+  border-bottom:1px solid var(--border); white-space:nowrap;
+}
+.cfg-table td { padding:6px 12px; border-bottom:1px solid var(--border); min-width:80px; }
+.cfg-table td[contenteditable="true"] { background:#fffef5; outline:none; cursor:text; }
+.cfg-table td[contenteditable="true"]:focus { background:var(--primary-soft); box-shadow:inset 0 0 0 2px var(--primary-soft-border); }
+.cfg-table .row-del { border:none; background:none; color:var(--text-3); cursor:pointer; font-size:14px; }
+.cfg-table .row-del:hover { color:var(--danger); }
+.type-btn {
+  border:1.5px solid var(--border); background:var(--surface); border-radius:10px;
+  padding:13px 8px; text-align:center; transition:var(--transition);
+}
+.type-btn .ico { font-size:20px; display:block; margin-bottom:5px; }
+.type-btn .name { font-size:13px; font-weight:600; color:var(--text-2); }
+.type-btn:hover { border-color:var(--primary-soft-border); background:var(--primary-soft); }
+.type-btn.active { border-color:var(--primary); background:var(--primary-soft); box-shadow:0 0 0 3px rgba(37,99,235,.10); }
+.type-btn.active .name { color:var(--primary); }
+
+/* 上传区 */
+.dropzone {
+  border:2px dashed var(--border-strong); border-radius:var(--radius); padding:30px 20px;
+  text-align:center; color:var(--text-3); transition:var(--transition); background:var(--surface-2);
+  margin-bottom:14px; cursor:pointer;
+}
+.dropzone:hover, .dropzone.drag { border-color:var(--primary); background:var(--primary-soft); color:var(--primary); }
+.dropzone .big { font-size:15px; font-weight:600; color:var(--text-2); margin-top:8px; }
+.dropzone.drag .big, .dropzone:hover .big { color:var(--primary); }
+.dropzone .small { font-size:12px; margin-top:4px; }
+.file-list { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+.file-item {
+  display:flex; align-items:center; gap:10px; padding:9px 14px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px;
+}
+.file-item .fname { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
+.file-item .fsize { color:var(--text-3); font-size:12px; }
+.file-item .rm { border:none; background:none; color:var(--text-3); font-size:16px; padding:0 4px; }
+.file-item .rm:hover { color:var(--danger); }
+
+/* 提交进度 */
+.submit-row { display:flex; align-items:center; gap:14px; }
+.submit-note { font-size:12.5px; color:var(--text-3); }
+.offline-warn {
+  display:none; margin-bottom:14px; padding:10px 14px; border-radius:var(--radius-sm);
+  background:var(--warn-soft); border:1px solid var(--warn-border); color:var(--warn); font-size:13px;
+}
+
+/* 系统账号输入 */
+.cred-box {
+  border:1px solid var(--primary-soft-border); background:var(--primary-soft);
+  border-radius:var(--radius); padding:14px 16px; margin-bottom:16px;
+}
+.cred-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:12px; }
+.cred-title span { font-weight:400; color:var(--text-3); font-size:12px; margin-left:6px; }
+.cred-line { display:flex; align-items:center; gap:12px; font-size:13px; color:var(--text-2); }
+.cred-line span { flex:1; }
+.cred-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width:560px){ .cred-grid { grid-template-columns:1fr; } }
+.cred-grid label { display:block; font-size:12px; font-weight:600; color:var(--text-2); margin-bottom:5px; }
+.cred-grid input {
+  width:100%; padding:9px 12px; border:1px solid var(--border-strong); border-radius:var(--radius-sm);
+  font-size:13.5px; outline:none; transition:var(--transition); background:var(--surface);
+}
+.cred-grid input:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+.cred-remember { display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--text-2); margin-top:11px; cursor:pointer; }
+.cred-remember input { width:15px; height:15px; cursor:pointer; }
+
+/* 验证码中继 */
+.tfa-box {
+  margin-top:14px; padding:14px 16px; border-radius:var(--radius-sm);
+  background:var(--warn-soft); border:1px solid var(--warn-border);
+}
+.tfa-box .tfa-t { font-size:13px; font-weight:700; color:var(--warn); margin-bottom:4px; }
+.tfa-box .tfa-d { font-size:12px; color:var(--text-2); margin-bottom:10px; }
+.tfa-row { display:flex; gap:10px; }
+.tfa-row input {
+  flex:1; padding:10px 13px; border:1px solid var(--warn-border); border-radius:var(--radius-sm);
+  font-size:16px; letter-spacing:3px; text-align:center; outline:none; background:var(--surface); font-family:var(--mono);
+}
+.tfa-row input:focus { border-color:var(--warn); box-shadow:0 0 0 3px rgba(217,119,6,.15); }
+
+/* ============ 任务列表 ============ */
+.task-table { width:100%; border-collapse:collapse; }
+.task-table th {
+  text-align:left; font-size:12px; color:var(--text-3); font-weight:600;
+  padding:10px 22px; border-bottom:1px solid var(--border); background:var(--surface-2);
+}
+.task-table td { padding:13px 22px; border-bottom:1px solid var(--border); font-size:13.5px; vertical-align:middle; }
+.task-table tr.task-row { transition:var(--transition); cursor:pointer; }
+.task-table tr.task-row:hover { background:var(--primary-soft); }
+.task-table tr:last-child td { border-bottom:none; }
+.t-type { font-weight:600; }
+.t-meta { color:var(--text-3); font-size:12px; }
+.badge {
+  display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px;
+  font-size:12px; font-weight:600; border:1px solid transparent;
+}
+.badge .bdot { width:6px; height:6px; border-radius:50%; }
+.b-pending  { background:var(--warn-soft); color:var(--warn); border-color:var(--warn-border); }
+.b-pending .bdot { background:var(--warn); }
+.b-running  { background:var(--primary-soft); color:var(--primary); border-color:var(--primary-soft-border); }
+.b-running .bdot { background:var(--primary); animation:pulse 1.6s infinite; }
+.b-done     { background:var(--success-soft); color:var(--success); border-color:var(--success-border); }
+.b-done .bdot { background:var(--success); }
+.b-fail     { background:var(--danger-soft); color:var(--danger); border-color:var(--danger-border); }
+.b-fail .bdot { background:var(--danger); }
+.b-upload   { background:var(--info-soft); color:var(--info); border-color:var(--info-border); }
+.b-upload .bdot { background:var(--info); }
+.mini-prog { width:110px; height:6px; background:var(--surface-2); border-radius:3px; overflow:hidden; }
+.mini-prog>i { display:block; height:100%; background:var(--gradient-brand); border-radius:3px; transition:width .5s; }
+.empty-state { text-align:center; padding:44px 20px 40px; }
+.empty-state img { width:180px; opacity:.9; }
+.empty-state p { color:var(--text-3); font-size:13px; margin-top:10px; }
+
+/* ============ 详情弹层 ============ */
+.overlay {
+  position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:80;
+  display:none; align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto;
+  backdrop-filter: blur(2px);
+}
+.overlay.show { display:flex; }
+.modal {
+  width: 780px; max-width:100%; background:var(--surface); border-radius:16px;
+  box-shadow:var(--shadow-pop); animation:rise .28s cubic-bezier(.2,.8,.3,1); overflow:hidden;
+}
+.modal-head { padding:18px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+.modal-head h3 { font-size:16px; font-weight:700; flex:1; }
+.modal-close { border:none; background:var(--surface-2); width:32px; height:32px; border-radius:8px; font-size:15px; color:var(--text-2); }
+.modal-close:hover { background:var(--danger-soft); color:var(--danger); }
+.modal-body { padding:22px 24px; }
+.prog-wrap { margin:6px 0 4px; }
+.prog-top { display:flex; justify-content:space-between; font-size:12.5px; color:var(--text-2); margin-bottom:6px; }
+.prog-bar { height:10px; background:var(--surface-2); border-radius:5px; overflow:hidden; }
+.prog-bar>i { display:block; height:100%; background:var(--gradient-brand); border-radius:5px; transition:width .6s; }
+.step-line { font-size:12.5px; color:var(--text-3); margin-top:8px; min-height:18px; }
+.sec-label { font-size:12.5px; font-weight:700; color:var(--text-2); margin:18px 0 8px; display:flex; align-items:center; gap:8px; }
+.terminal {
+  background:var(--terminal-bg); color:var(--terminal-text); font-family:var(--mono);
+  font-size:12px; line-height:1.65; border-radius:10px; padding:14px 16px;
+  height:260px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;
+}
+.err-box {
+  background:var(--danger-soft); border:1px solid var(--danger-border); color:var(--danger);
+  border-radius:var(--radius-sm); padding:12px 15px; font-size:13px; white-space:pre-wrap; margin-top:6px;
+}
+.out-files { display:flex; flex-direction:column; gap:8px; }
+.out-item {
+  display:flex; align-items:center; gap:12px; border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:10px 14px; background:var(--surface);
+  transition:var(--transition);
+}
+.out-item:hover { border-color:var(--primary-soft-border); background:var(--primary-soft); }
+.out-item .oname { flex:1; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.out-item .osize { font-size:12px; color:var(--text-3); }
+
+/* toast */
+#toast {
+  position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px);
+  background:var(--text); color:#fff; padding:11px 22px; border-radius:10px; font-size:13.5px;
+  opacity:0; transition:all .3s cubic-bezier(.2,.8,.3,1); z-index:200; box-shadow:var(--shadow-pop);
+  max-width:calc(100vw - 40px);
+}
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+#toast.err { background:var(--danger); }
+
+.spinner {
+  width:15px; height:15px; border:2px solid rgba(255,255,255,.35); border-top-color:#fff;
+  border-radius:50%; animation:spin .7s linear infinite; display:inline-block;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ============ 登录门 ============ -->
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <img src="images/logo.png" alt="杂费加收云端处理门户标志">
+    <h1>杂费加收云端处理门户</h1>
+    <p class="desc">固定链接 · 任意网络可用 · 结果云端留存</p>
+    <div class="field">
+      <label>您的姓名</label>
+      <input id="gateName" placeholder="用于标记任务发起人" maxlength="20">
+    </div>
+    <div class="gate-grid">
+      <div class="field">
+        <label>XMS / 计费账号</label>
+        <input id="gateSysUser" placeholder="ffnc/XMS 账号" maxlength="40">
+      </div>
+      <div class="field">
+        <label>XMS / 计费密码</label>
+        <input id="gateSysPass" type="password" placeholder="登录密码" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>菜鸟工单账号 <span class="opt">（独立账号，不用可留空）</span></label>
+        <input id="gateCnUser" placeholder="菜鸟工单手机号/账号" maxlength="40">
+      </div>
+      <div class="field">
+        <label>菜鸟工单密码</label>
+        <input id="gateCnPass" type="password" placeholder="菜鸟登录密码" autocomplete="off">
+      </div>
+    </div>
+    <div class="field">
+      <label>访问码</label>
+      <input id="gateCode" type="password" placeholder="请输入团队访问码" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="gate-err" id="gateErr"></div>
+    <button class="btn btn-primary btn-block" id="gateBtn" onclick="doLogin()">进入门户</button>
+  </div>
+</div>
+
+<!-- ============ 顶栏 ============ -->
+<header class="topbar" style="display:none" id="topbar">
+  <div class="container topbar-inner">
+    <img class="logo" src="images/logo.png" alt="logo">
+    <div>
+      <div class="title">杂费加收云端处理门户</div>
+      <div class="sub">发起处理 · 查看进度 · 下载结果</div>
+    </div>
+    <div class="spacer"></div>
+    <span class="agent-pill" id="agentPill"><span class="dot"></span><span id="agentText">检测中...</span></span>
+    <span class="user-chip">👤 <b id="userChip"></b></span>
+    <button class="btn btn-ghost btn-sm" id="adminBtn" onclick="toggleAdmin()">管理</button>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">退出</button>
+  </div>
+</header>
+
+<!-- ============ 主体 ============ -->
+<main class="container" style="display:none" id="main">
+
+  <!-- 页签导航 -->
+  <div class="nav-tabs">
+    <button class="nav-tab active" data-tab="process" onclick="switchTab('process')">📊 数据处理</button>
+    <button class="nav-tab" data-tab="config" onclick="switchTab('config')">⚙️ 配置管理</button>
+  </div>
+
+  <!-- ===== TAB1: 数据处理 ===== -->
+  <div id="tab-process">
+  <!-- 发起处理 -->
+  <section class="card">
+    <div class="card-head"><h2>🚀 发起处理</h2><span class="hint">选择板块 → 上传加收源数据 Excel → 提交</span></div>
+    <div class="card-body">
+      <div class="offline-warn" id="offlineWarn">⚠️ 处理主机当前离线，提交的任务将排队，待主机上线后自动开始处理。</div>
+      <div class="type-grid" id="typeGrid">
+        <button class="type-btn active" data-type=""><span class="ico">📋</span><span class="name">全部类型</span></button>
+        <button class="type-btn" data-type="前后线加收"><span class="ico">🚚</span><span class="name">前后线加收</span></button>
+        <button class="type-btn" data-type="提货费加收"><span class="ico">📦</span><span class="name">提货费加收</span></button>
+        <button class="type-btn" data-type="仓储费加收"><span class="ico">🏭</span><span class="name">仓储费加收</span></button>
+        <button class="type-btn" data-type="单独报关费加收"><span class="ico">🛃</span><span class="name">单独报关费</span></button>
+        <button class="type-btn" data-type="登记系统"><span class="ico">📝</span><span class="name">登记系统</span></button>
+      </div>
+      <div class="cred-box">
+        <div class="cred-title">🔑 处理账号 <span>凭证已在进入门户时保存，处理时自动使用（各账号数据互相隔离）</span></div>
+        <div class="cred-line">
+          <span id="credInfo">-</span>
+          <button class="btn btn-sm btn-ghost" onclick="maybeWarmupLogin(true)">重新登录各系统</button>
+        </div>
+      </div>
+      <div class="reg-note" id="regNote">
+        <div>📝 登记系统板块无需上传文件——处理主机会自动从杂费登记系统拉取"未加收"记录进行处理。</div>
+        <div class="reg-auth-row">
+          <span id="regAuthStatus">⚠ 未授权</span>
+          <button class="btn btn-sm btn-primary" onclick="triggerRegAuth()">去授权（用我自己的登记系统身份）</button>
+        </div>
+        <div class="reg-bm-setup" id="regBmSetup" style="display:none">
+          <b>首次使用需设置一次"发送Token"书签（1分钟）：</b><br>
+          1. 点<button class="btn-page" onclick="copyBookmarklet()">复制书签代码</button>
+          → 在浏览器收藏栏<b>右键 → 添加网页/新建书签</b>，名称填"发送Token"，网址粘贴刚复制的代码<br>
+          2. 点上方"去授权"打开登记系统（会自动登录成您自己）→ 在该页面点收藏栏的"发送Token"书签 → 自动回传完成
+          <a href="javascript:void(0)" onclick="this.parentElement.style.display='none';localStorage.setItem('portal_reg_bm_setup','1')" style="margin-left:8px">不再提示</a>
+        </div>
+      </div>
+      <div class="dropzone" id="dropzone">
+        <div style="font-size:26px">📂</div>
+        <div class="big">点击选择或拖拽 Excel 文件到此处</div>
+        <div class="small">支持 .xlsx / .xls，可多选（加收源数据文件）</div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" multiple style="display:none">
+      <div class="file-list" id="fileList"></div>
+      <div class="submit-row">
+        <button class="btn btn-primary" id="submitBtn" onclick="submitTask()">提交处理任务</button>
+        <span class="submit-note" id="submitNote"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 任务列表 -->
+  <section class="card">
+    <div class="card-head"><h2>📑 任务记录</h2><span class="hint">自动刷新 · 点击任务查看详情与下载</span></div>
+    <div id="taskWrap">
+      <div class="empty-state"><img src="images/empty.png" alt="暂无任务" loading="lazy"><p>还没有任务，提交第一个处理任务吧</p></div>
+    </div>
+  </section>
+  </div>
+
+  <!-- ===== TAB2: 配置管理 ===== -->
+  <div id="tab-config" style="display:none">
+  <section class="card">
+    <div class="card-head">
+      <h2>⚙️ 配置管理</h2>
+      <span class="hint" id="cfgHint">查看汇率/费用代码等配置（编辑需管理员）</span>
+    </div>
+    <div class="card-body" id="cfgBody">
+      <div class="cfg-tabs" id="cfgTabs">
+        <button class="cfg-tab active" data-cfg="fee_code">费用名称代码</button>
+        <button class="cfg-tab" data-cfg="standard">加收标准</button>
+        <button class="cfg-tab" data-cfg="exchange_rate">汇率配置</button>
+        <button class="cfg-tab" data-cfg="currency_keep">币种保留(产品)</button>
+        <button class="cfg-tab" data-cfg="currency_keep_customer">币种保留(客户)</button>
+      </div>
+      <div class="cfg-toolbar" id="cfgToolbar">
+        <span id="cfgStatus" class="cfg-status"></span>
+        <span style="flex:1"></span>
+        <button class="btn btn-sm btn-ghost" id="cfgReload" onclick="loadConfig(currentCfg)">刷新</button>
+        <button class="btn btn-sm btn-ghost" id="cfgAddRow" onclick="cfgAddRow()" style="display:none">+ 添加行</button>
+        <button class="btn btn-sm btn-primary" id="cfgSave" onclick="saveConfig()" style="display:none">保存到系统</button>
+      </div>
+      <div class="cfg-table-wrap" id="cfgTableWrap"></div>
+    </div>
+  </section>
+  </div>
+</main>
+
+<!-- ============ 任务详情 ============ -->
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeDetail()">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="dTitle">任务详情</h3>
+      <span id="dBadgeWrap"></span>
+      <button class="modal-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="prog-wrap">
+        <div class="prog-top"><span id="dStep">-</span><span id="dPct">0%</span></div>
+        <div class="prog-bar"><i id="dBar" style="width:0%"></i></div>
+        <div class="step-line" id="dMeta"></div>
+      </div>
+      <div class="tfa-box" id="dTfaWrap" style="display:none">
+        <div class="tfa-t">🔐 需要登录验证码</div>
+        <div class="tfa-d" id="dTfaMsg">系统向您的账号发送了验证码，请输入以继续登录。</div>
+        <div class="tfa-row">
+          <input id="dTfaInput" placeholder="输入验证码" maxlength="10" autocomplete="off"
+                 onkeydown="if(event.key==='Enter')submitTfa()">
+          <button class="btn btn-primary" id="dTfaBtn" onclick="submitTfa()">提交</button>
+        </div>
+      </div>
+      <div id="dErrWrap" style="display:none"><div class="sec-label">❌ 失败原因</div><div class="err-box" id="dErr"></div></div>
+      <div id="dStatWrap" style="display:none">
+        <div class="stat-grid">
+          <div class="stat-card"><div class="sl">源数据总量</div><div class="sv blue" id="stTotal">--</div></div>
+          <div class="stat-card"><div class="sl">内部去重剔除</div><div class="sv dim" id="stDedup1">--</div></div>
+          <div class="stat-card"><div class="sl">计费明细重复剔除</div><div class="sv dim" id="stDedup2">--</div></div>
+          <div class="stat-card"><div class="sl">最终输出</div><div class="sv green" id="stFinal">--</div></div>
+        </div>
+        <div id="dWarnWrap" style="display:none">
+          <div class="warn-toolbar">
+            <span>⚠️ 校验提示</span>
+            <span class="wt-info" id="wtInfo"></span>
+            <span class="spacer"></span>
+            <button class="btn-page" id="wtPrev">上一页</button>
+            <button class="btn-page" id="wtNext">下一页</button>
+            <button class="btn-page" id="wtCsv">下载全部(CSV)</button>
+          </div>
+          <div class="warn-list" id="dWarns"></div>
+        </div>
+      </div>
+      <div id="dOutWrap" style="display:none">
+        <div class="sec-label">📥 结果文件 <span style="font-weight:400;color:var(--text-3)">（云端留存，随时可下载）</span></div>
+        <div class="out-files" id="dOut"></div>
+      </div>
+      <div id="dActWrap" style="display:none">
+        <div class="sec-label">📤 上传系统</div>
+        <div id="dActBody"></div>
+      </div>
+      <div class="sec-label">🖥️ 处理日志</div>
+      <div class="terminal" id="dLog">等待日志...</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = 'https://apszyinnbbpsdqzchmuu.supabase.co/functions/v1/zafei-gateway/api';
+const TYPES_ICON = { '':'📋','前后线加收':'🚚','提货费加收':'📦','仓储费加收':'🏭','单独报关费加收':'🛃','登记系统':'📝','凭证预登录':'🔑' };
+let accessCode = localStorage.getItem('portal_code') || '';
+let userName = localStorage.getItem('portal_name') || '';
+let sysUserId = localStorage.getItem('portal_sys_user') || '';   // 数据隔离身份（XMS账号）
+let adminCode = localStorage.getItem('portal_admin') || '';       // 管理员密码（可看全部）
+let regAccessToken = '';                                          // 登记系统授权token（sessionStorage按账号）
+let selectedType = '';
+let pickedFiles = [];
+let listTimer = null, detailTimer = null, currentDetailId = null;
+
+// ---------- 基础 ----------
+async function api(action, extra) {
+  const body = Object.assign({ action, access_code: accessCode, viewer: sysUserId }, extra || {});
+  if (adminCode) body.admin_code = adminCode;
+  const res = await fetch(API, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({ error:'响应解析失败' }));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+function toast(msg, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = isErr ? 'err show' : 'show';
+  clearTimeout(t._h); t._h = setTimeout(() => t.className = '', 3200);
+}
+function fmtSize(n){ if(!n&&n!==0)return''; return n>1048576?(n/1048576).toFixed(1)+' MB':(n/1024).toFixed(0)+' KB'; }
+function fmtTime(s){ if(!s)return'-'; const d=new Date(s); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+
+const STATUS_MAP = {
+  uploading:        { text:'上传中',   cls:'b-upload'  },
+  pending:          { text:'排队中',   cls:'b-pending' },
+  claimed:          { text:'已领取',   cls:'b-running' },
+  logging_in:       { text:'登录中',   cls:'b-running' },
+  need_2fa:         { text:'待验证码', cls:'b-pending' },
+  fetching:         { text:'查询数据', cls:'b-running' },
+  processing:       { text:'处理中',   cls:'b-running' },
+  uploading_results:{ text:'回传结果', cls:'b-running' },
+  completed:        { text:'已完成',   cls:'b-done'    },
+  failed:           { text:'失败',     cls:'b-fail'    },
+};
+function badgeHtml(st){ const m = STATUS_MAP[st] || { text:st, cls:'b-upload' }; return `<span class="badge ${m.cls}"><span class="bdot"></span>${m.text}</span>`; }
+function isRunning(st){ return ['pending','claimed','logging_in','need_2fa','fetching','processing','uploading_results'].includes(st); }
+
+// ---------- 登录 ----------
+const b64e = s => btoa(unescape(encodeURIComponent(s)));
+const b64d = s => { try { return decodeURIComponent(escape(atob(s))); } catch(e) { return ''; } };
+function getCreds() {
+  return {
+    sys_username: sysUserId,
+    sys_password: b64d(localStorage.getItem('portal_sys_pass') || ''),
+    cainiao_username: localStorage.getItem('portal_cn_user') || '',
+    cainiao_password: b64d(localStorage.getItem('portal_cn_pass') || ''),
+  };
+}
+async function doLogin() {
+  const name = document.getElementById('gateName').value.trim();
+  const su = document.getElementById('gateSysUser').value.trim();
+  const sp = document.getElementById('gateSysPass').value;
+  const cnu = document.getElementById('gateCnUser').value.trim();
+  const cnp = document.getElementById('gateCnPass').value;
+  const code = document.getElementById('gateCode').value.trim();
+  const err = document.getElementById('gateErr');
+  if (!name) { err.textContent = '请输入姓名'; return; }
+  if (!su) { err.textContent = '请输入 XMS/计费系统账号'; return; }
+  if (!sp) { err.textContent = '请输入 XMS/计费系统密码'; return; }
+  if (cnu && !cnp) { err.textContent = '填了菜鸟账号就需要填菜鸟密码'; return; }
+  if (!code) { err.textContent = '请输入访问码'; return; }
+  const btn = document.getElementById('gateBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 验证中...';
+  accessCode = code;
+  sysUserId = su;
+  try {
+    await api('login');
+    userName = name;
+    localStorage.setItem('portal_code', code);
+    localStorage.setItem('portal_name', name);
+    localStorage.setItem('portal_sys_user', su);
+    localStorage.setItem('portal_sys_pass', b64e(sp));
+    if (cnu) {
+      localStorage.setItem('portal_cn_user', cnu);
+      localStorage.setItem('portal_cn_pass', b64e(cnp));
+    } else {
+      localStorage.removeItem('portal_cn_user');
+      localStorage.removeItem('portal_cn_pass');
+    }
+    enterPortal();
+    maybeWarmupLogin();
+  } catch(e) {
+    err.textContent = e.message.includes('访问码') ? '访问码错误，请重试' : e.message;
+    accessCode = '';
+  }
+  btn.disabled = false; btn.textContent = '进入门户';
+}
+
+// 进门户后自动预登录各系统（每账号3天内不重复；失败不阻塞正常使用）
+async function maybeWarmupLogin(force) {
+  const key = 'portal_warmup_' + sysUserId;
+  const last = +(localStorage.getItem(key) || 0);
+  // 间隔 1 天：需 < XMS Cookie 有效期(约2天)，才能在过期前提前刷新、避免触发验证码
+  if (!force && Date.now() - last < 1 * 24 * 3600 * 1000) return;
+  const c = getCreds();
+  if (!c.sys_password) return;
+  try {
+    const { task_id } = await api('create_task', Object.assign({
+      template_type: '凭证预登录', created_by: userName }, c));
+    await api('submit_task', { task_id });
+    localStorage.setItem(key, String(Date.now()));
+    toast('正在为您预登录各系统（首次可能需要输入验证码）...');
+    refreshList();
+    openDetail(task_id);
+  } catch(e) {
+    toast('预登录发起失败：' + e.message, true);
+  }
+}
+function logout() {
+  localStorage.removeItem('portal_code');
+  localStorage.removeItem('portal_admin');
+  clearInterval(listTimer); clearInterval(detailTimer);
+  location.reload();
+}
+async function toggleAdmin() {
+  if (adminCode) {
+    adminCode = '';
+    localStorage.removeItem('portal_admin');
+    document.getElementById('adminBtn').textContent = '管理';
+    toast('已退出管理模式');
+    refreshList();
+    return;
+  }
+  const pw = prompt('请输入管理员密码（查看全部人的任务）：');
+  if (!pw) return;
+  adminCode = pw.trim();
+  try {
+    await api('admin_login');
+    localStorage.setItem('portal_admin', adminCode);
+    document.getElementById('adminBtn').textContent = '退出管理';
+    toast('✅ 管理模式：可查看全部任务');
+    refreshList();
+  } catch(e) {
+    adminCode = '';
+    toast('管理员密码错误', true);
+  }
+}
+function enterPortal() {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('topbar').style.display = '';
+  document.getElementById('main').style.display = '';
+  document.getElementById('userChip').textContent = `${userName}（${sysUserId}）`;
+  const cn = localStorage.getItem('portal_cn_user');
+  document.getElementById('credInfo').textContent =
+    `XMS/计费：${sysUserId}　|　菜鸟工单：${cn || '未设置'}`;
+  if (adminCode) document.getElementById('adminBtn').textContent = '退出管理';
+  refreshList();
+  listTimer = setInterval(refreshList, 4000);
+}
+
+// ---------- 板块选择 ----------
+document.getElementById('typeGrid').addEventListener('click', (e) => {
+  const btn = e.target.closest('.type-btn'); if (!btn) return;
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedType = btn.dataset.type;
+  // 登记系统板块：无需上传文件
+  const isReg = selectedType === '登记系统';
+  document.getElementById('regNote').style.display = isReg ? 'block' : 'none';
+  document.getElementById('dropzone').style.display = isReg ? 'none' : '';
+  document.getElementById('fileList').style.display = isReg ? 'none' : '';
+  if (isReg) updateRegAuthStatus();
+});
+
+// ---------- 文件选择 ----------
+const dz = document.getElementById('dropzone');
+const fi = document.getElementById('fileInput');
+dz.addEventListener('click', () => fi.click());
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); addFiles(e.dataTransfer.files); });
+fi.addEventListener('change', () => { addFiles(fi.files); fi.value = ''; });
+
+function addFiles(list) {
+  for (const f of list) {
+    if (!/\.(xlsx|xls)$/i.test(f.name)) { toast(`${f.name} 不是Excel文件，已跳过`, true); continue; }
+    if (f.size > 4.5 * 1048576) { toast(`${f.name} 超过4.5MB上限，已跳过`, true); continue; }
+    if (pickedFiles.some(p => p.name === f.name)) continue;
+    pickedFiles.push(f);
+  }
+  renderFiles();
+}
+function removeFile(i){ pickedFiles.splice(i,1); renderFiles(); }
+function renderFiles() {
+  document.getElementById('fileList').innerHTML = pickedFiles.map((f,i) =>
+    `<div class="file-item">📄 <span class="fname">${esc(f.name)}</span><span class="fsize">${fmtSize(f.size)}</span>
+     <button class="rm" data-rm="${i}" title="移除">✕</button></div>`).join('');
+}
+document.getElementById('fileList').addEventListener('click', e => {
+  const b = e.target.closest('[data-rm]'); if (b) removeFile(+b.dataset.rm);
+});
+
+function fileToBase64(f) {
+  return new Promise((ok, no) => {
+    const r = new FileReader();
+    r.onload = () => ok(r.result.split(',')[1]);
+    r.onerror = no;
+    r.readAsDataURL(f);
+  });
+}
+
+// ---------- 提交任务 ----------
+async function submitTask() {
+  const isReg = selectedType === '登记系统';
+  if (!isReg && !pickedFiles.length) { toast('请先选择加收源数据 Excel 文件', true); return; }
+  const creds = getCreds();
+  if (!creds.sys_password) { toast('登录凭证已失效，请退出后重新进入门户', true); return; }
+  if (isReg && !regAccessToken) { toast('请先在下方点"去授权"，用您自己的登记系统身份授权', true); return; }
+  const btn = document.getElementById('submitBtn');
+  const note = document.getElementById('submitNote');
+  btn.disabled = true;
+  try {
+    btn.innerHTML = '<span class="spinner"></span> 创建任务...';
+    const payload = Object.assign({ template_type: selectedType, created_by: userName }, creds);
+    if (isReg) payload.reg_access_token = regAccessToken;
+    const { task_id } = await api('create_task', payload);
+    for (let i = 0; i < pickedFiles.length; i++) {
+      const f = pickedFiles[i];
+      note.textContent = `正在上传 ${i+1}/${pickedFiles.length}：${f.name}`;
+      btn.innerHTML = `<span class="spinner"></span> 上传中 ${i+1}/${pickedFiles.length}`;
+      const b64 = await fileToBase64(f);
+      await api('upload_input', { task_id, name: f.name, content_base64: b64 });
+    }
+    await api('submit_task', { task_id });
+    note.textContent = '';
+    pickedFiles = []; renderFiles();
+    toast('✅ 任务已提交，处理主机将自动领取');
+    refreshList();
+    openDetail(task_id);
+  } catch(e) {
+    toast('提交失败：' + e.message, true);
+    note.textContent = '';
+  }
+  btn.disabled = false; btn.textContent = '提交处理任务';
+}
+
+// ---------- 任务列表 ----------
+async function refreshList() {
+  try {
+    const data = await api('list_tasks');
+    // agent 状态
+    const pill = document.getElementById('agentPill');
+    pill.className = 'agent-pill ' + (data.agent_online ? 'online' : 'offline');
+    document.getElementById('agentText').textContent = data.agent_online ? '处理主机在线' : '处理主机离线';
+    document.getElementById('offlineWarn').style.display = data.agent_online ? 'none' : '';
+
+    const wrap = document.getElementById('taskWrap');
+    if (!data.tasks.length) {
+      wrap.innerHTML = `<div class="empty-state"><img src="images/empty.png" alt="暂无任务" loading="lazy"><p>还没有任务，提交第一个处理任务吧</p></div>`;
+      return;
+    }
+    wrap.innerHTML = `<table class="task-table">
+      <thead><tr><th>板块</th><th>发起人</th>${data.is_admin ? '<th>账号</th>' : ''}<th>提交时间</th><th>状态</th><th>进度</th><th>结果</th></tr></thead>
+      <tbody>` + data.tasks.map(t => {
+        const tp = t.template_type || '全部类型';
+        const nOut = (t.output_files || []).length;
+        return `<tr class="task-row" data-id="${t.id}">
+          <td class="t-type">${TYPES_ICON[t.template_type] || '📋'} ${esc(tp)}</td>
+          <td>${esc(t.created_by || '-')}</td>
+          ${data.is_admin ? `<td class="t-meta">${esc(t.sys_username || '-')}</td>` : ''}
+          <td class="t-meta">${fmtTime(t.created_at)}</td>
+          <td>${badgeHtml(t.status)}</td>
+          <td><div class="mini-prog"><i style="width:${t.progress || 0}%"></i></div></td>
+          <td class="t-meta">${nOut ? '📄 ' + nOut + ' 个文件' : '-'}</td>
+        </tr>`;
+      }).join('') + '</tbody></table>';
+  } catch(e) { /* 静默，下轮重试 */ }
+}
+document.getElementById('taskWrap').addEventListener('click', e => {
+  const tr = e.target.closest('.task-row'); if (tr) openDetail(tr.dataset.id);
+});
+
+// ---------- 任务详情 ----------
+async function openDetail(id) {
+  currentDetailId = id;
+  document.getElementById('overlay').classList.add('show');
+  await renderDetail();
+  clearInterval(detailTimer);
+  detailTimer = setInterval(renderDetail, 2500);
+}
+function closeDetail() {
+  document.getElementById('overlay').classList.remove('show');
+  clearInterval(detailTimer);
+  currentDetailId = null;
+  _warnData = []; _warnPage = 1;
+}
+
+// ---------- 校验提示分页 ----------
+let _warnData = [], _warnPage = 1;
+const WARN_PAGE_SIZE = 15;
+function setWarns(warns) {
+  const wrap = document.getElementById('dWarnWrap');
+  if (!warns.length) { wrap.style.display = 'none'; _warnData = []; return; }
+  const changed = warns.length !== _warnData.length;
+  _warnData = warns;
+  if (changed) _warnPage = 1;
+  wrap.style.display = '';
+  renderWarnPage();
+}
+function renderWarnPage() {
+  const total = _warnData.length;
+  const pages = Math.max(1, Math.ceil(total / WARN_PAGE_SIZE));
+  if (_warnPage > pages) _warnPage = pages;
+  document.getElementById('wtInfo').textContent = `共 ${total} 条，第 ${_warnPage} / ${pages} 页`;
+  document.getElementById('wtPrev').disabled = _warnPage <= 1;
+  document.getElementById('wtNext').disabled = _warnPage >= pages;
+  const start = (_warnPage - 1) * WARN_PAGE_SIZE;
+  document.getElementById('dWarns').innerHTML = _warnData.slice(start, start + WARN_PAGE_SIZE)
+    .map((w, i) => `<div class="w-item">${start + i + 1}. ${esc(w)}</div>`).join('');
+}
+document.getElementById('wtPrev').addEventListener('click', () => { _warnPage--; renderWarnPage(); });
+document.getElementById('wtNext').addEventListener('click', () => { _warnPage++; renderWarnPage(); });
+document.getElementById('wtCsv').addEventListener('click', () => {
+  if (!_warnData.length) return;
+  // UTF-8 BOM 保证 Excel 打开不乱码
+  const csv = '\ufeff序号,校验提示\n' + _warnData.map((w, i) =>
+    `${i + 1},"${String(w).replace(/"/g, '""')}"`).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const d = new Date();
+  a.download = `校验提示_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('✅ 已下载校验提示（' + _warnData.length + ' 条）');
+});
+
+async function renderDetail() {
+  if (!currentDetailId) return;
+  try {
+    const { task: t } = await api('get_task', { task_id: currentDetailId });
+    document.getElementById('dTitle').textContent = (TYPES_ICON[t.template_type]||'📋') + ' ' + (t.template_type || '全部类型');
+    document.getElementById('dBadgeWrap').innerHTML = badgeHtml(t.status);
+    document.getElementById('dPct').textContent = (t.progress || 0) + '%';
+    document.getElementById('dBar').style.width = (t.progress || 0) + '%';
+    document.getElementById('dStep').textContent = t.step || STATUS_MAP[t.status]?.text || '-';
+    document.getElementById('dMeta').textContent =
+      `发起人 ${t.created_by || '-'} · 提交于 ${fmtTime(t.created_at)}` +
+      (t.completed_at ? ` · 完成于 ${fmtTime(t.completed_at)}` : '');
+    // 错误
+    const ew = document.getElementById('dErrWrap');
+    if (t.status === 'failed' && t.error) { ew.style.display = ''; document.getElementById('dErr').textContent = t.error; }
+    else ew.style.display = 'none';
+    // 登录验证码中继
+    const tw = document.getElementById('dTfaWrap');
+    if (t.status === 'need_2fa' || t.login_state === 'need_2fa') {
+      if (tw.style.display === 'none') { tw.style.display = ''; document.getElementById('dTfaInput').focus(); }
+      if (t.login_message) document.getElementById('dTfaMsg').textContent = t.login_message;
+    } else {
+      tw.style.display = 'none';
+    }
+    // 处理统计（任务完成且有summary时展示）
+    const sw = document.getElementById('dStatWrap');
+    const sm = t.summary;
+    if (sm && t.status === 'completed') {
+      sw.style.display = '';
+      document.getElementById('stTotal').textContent = sm.total_input || '--';
+      document.getElementById('stDedup1').textContent = sm.dedup1_removed || '--';
+      document.getElementById('stDedup2').textContent = sm.dedup2_removed || '--';
+      document.getElementById('stFinal').textContent = (sm.final_output || sm.final_output === 0) ? sm.final_output : '--';
+      // 警告与提示列表（分页展示）
+      const warns = [...(sm.warnings || []), ...(sm.hints || [])];
+      setWarns(warns);
+    } else sw.style.display = 'none';
+    // 输出文件（完成后按文件名匹配显示"上传系统"按钮）
+    const ow = document.getElementById('dOutWrap');
+    const outs = t.output_files || [];
+    const actBusy = ['pending', 'running'].includes(t.action_state);
+    const uploadBtn = (f) => {
+      if (t.status !== 'completed') return '';
+      let type = '', label = '', cls = '';
+      const n = f.name || '';
+      if (/^直邮前后线杂费客户代码加收/.test(n)) { type = 'upload_no_tracking'; label = '无单号上传计费系统'; cls = ' orange'; }
+      else if (/^(前后线仓外通知表|仓外通知)/.test(n) || n.includes('仓外通知')) { type = 'upload_notification'; label = '上传系统'; }
+      else if (n.includes('汇总表') || n.includes('剔除明细')) { type = ''; }  // 报表类不上传
+      else if (/^直邮前后线杂费加收/.test(n)) { type = 'import_ffnc'; label = '上传计费系统+回写'; }
+      else { type = 'import_ffnc'; label = '上传系统'; }  // 其余板块（仓储/提货/报关等）：上传计费导入，不回写
+      if (!type) return '';
+      return `<button class="btn btn-sm btn-up${cls}" data-up="${type}" data-fn="${esc(n)}" ${actBusy ? 'disabled' : ''}>${label}</button>`;
+    };
+    if (outs.length) {
+      ow.style.display = '';
+      document.getElementById('dOut').innerHTML = outs.map(f =>
+        `<div class="out-item">📄 <span class="oname">${esc(f.name)}</span><span class="osize">${fmtSize(f.size)}</span>
+         ${uploadBtn(f)}
+         <button class="btn btn-sm btn-dl" data-dl="${esc(f.path)}" data-nm="${esc(f.name)}">下载</button></div>`).join('');
+    } else ow.style.display = 'none';
+    // 上传动作状态
+    const aw = document.getElementById('dActWrap');
+    if (t.action_state) {
+      aw.style.display = '';
+      const AN = { import_ffnc: '上传计费系统+回写', upload_notification: '仓外通知上传系统', upload_no_tracking: '无单号上传计费系统' };
+      const AS = { pending: ['⏳ 排队等待本机执行', 'run'], running: ['🔄 执行中...', 'run'],
+                   completed: ['✅ 上传成功', 'ok'], failed: ['❌ 上传失败', 'bad'] };
+      const [asText, asCls] = AS[t.action_state] || [t.action_state, ''];
+      document.getElementById('dActBody').innerHTML =
+        `<div class="act-head ${asCls}">${AN[t.action_type] || t.action_type || ''} — ${asText}` +
+        (t.action_result ? `<div style="font-weight:400;margin-top:4px">${esc(t.action_result)}</div>` : '') + `</div>` +
+        (t.action_log ? `<div class="terminal" style="height:130px">${esc(t.action_log)}</div>` : '');
+    } else aw.style.display = 'none';
+    // 日志
+    const logEl = document.getElementById('dLog');
+    const nearBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 60;
+    logEl.textContent = t.log || (isRunning(t.status) ? '等待处理主机日志...' : '（无日志）');
+    if (nearBottom) logEl.scrollTop = logEl.scrollHeight;
+    // 完成后停止高频刷新（上传动作进行中时继续刷新）
+    if (!isRunning(t.status) && !actBusy) { clearInterval(detailTimer); detailTimer = null; }
+  } catch(e) { /* 忽略瞬时错误 */ }
+}
+document.getElementById('overlay').addEventListener('click', async e => {
+  // 上传系统按钮
+  const ub = e.target.closest('[data-up]');
+  if (ub) {
+    const CONFIRM_MSG = {
+      import_ffnc: '确认将该文件上传到计费系统（ffnc杂费导入）？\n有单号登记文件会额外回写登记系统"已加收"，其余板块只上传不回写。\n上传过程由处理主机自动执行。',
+      upload_notification: '确认将仓外通知文件上传到 cs-packet（批量新建→导入）？',
+      upload_no_tracking: '确认执行无单号上传？将把「无单号调整导入」文件上传到计费系统生成计费单，并回写登记系统。\n请确认已核对过无单号数据。',
+    };
+    if (!confirm(CONFIRM_MSG[ub.dataset.up] || '确认执行上传？')) return;
+    ub.disabled = true;
+    try {
+      await api('request_upload', {
+        task_id: currentDetailId, upload_type: ub.dataset.up, filename: ub.dataset.fn,
+      });
+      toast('✅ 上传指令已下发，处理主机将自动执行');
+      if (!detailTimer) detailTimer = setInterval(renderDetail, 2500);
+      renderDetail();
+    } catch(err) {
+      toast('下发失败：' + err.message, true);
+      ub.disabled = false;
+    }
+    return;
+  }
+  const b = e.target.closest('[data-dl]'); if (!b) return;
+  const old = b.textContent;
+  b.disabled = true; b.textContent = '下载中...';
+  try {
+    const { name, content_base64 } = await api('download', { path: b.dataset.dl });
+    const bytes = Uint8Array.from(atob(content_base64), c => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = b.dataset.nm || name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('✅ 已开始下载：' + (b.dataset.nm || name));
+  } catch(err) { toast('下载失败：' + err.message, true); }
+  b.disabled = false; b.textContent = old;
+});
+
+// ---------- 登记系统授权（SSO免密：开链接自动登录成自己 → 书签回传token） ----------
+const REG_URL = 'https://iterative-app-build.1d.alibaba-inc.com/#/query';
+// bookmarklet：从登记系统页面 localStorage 取 access_token，postMessage 回本门户
+const REG_BOOKMARKLET = "javascript:void((function(){try{var k=Object.keys(localStorage).find(function(k){return k.indexOf('auth-token')>-1||k.indexOf('supabase')>-1});if(!k){alert('未找到登录信息，请确保已登录登记系统');return}var v=JSON.parse(localStorage.getItem(k));var t=v.access_token||v.token;if(!t||t.indexOf('eyJ')!==0){alert('Token无效，请重新登录');return}if(window.opener){window.opener.postMessage({type:'registration_token',success:true,data:{access_token:t}},'*');document.title='\\u2705 \u5df2\u53d1\u9001';setTimeout(function(){window.close()},1000)}else{navigator.clipboard.writeText(t).then(function(){alert('Token\u5df2\u590d\u5236\uff0c\u8bf7\u56de\u95e8\u6237\u7c98\u8d34')}).catch(function(){prompt('\u8bf7\u624b\u52a8\u590d\u5236:',t)})}}catch(e){alert('\u9519\u8bef: '+e.message)}})())";
+
+function updateRegAuthStatus() {
+  const el = document.getElementById('regAuthStatus');
+  if (!el) return;
+  if (regAccessToken) { el.textContent = '✅ 已授权（用您自己的登记系统身份）'; el.className = 'ok'; }
+  else { el.textContent = '⚠ 未授权'; el.className = 'no'; }
+}
+function triggerRegAuth() {
+  // 首次使用先提示设置书签
+  if (!localStorage.getItem('portal_reg_bm_setup')) {
+    document.getElementById('regBmSetup').style.display = 'block';
+  }
+  const w = window.open(REG_URL, '_blank');
+  if (!w) { toast('浏览器拦截了新标签页，请允许弹窗后重试', true); return; }
+  toast('已打开登记系统，登录后点收藏栏的"发送Token"书签即可');
+}
+function copyBookmarklet() {
+  navigator.clipboard.writeText(REG_BOOKMARKLET).then(() =>
+    alert('书签代码已复制！\n请在浏览器收藏栏右键 → 添加网页/新建书签，名称填"发送Token"，网址粘贴刚复制的代码。')
+  ).catch(() => prompt('请手动复制以下内容作为书签网址：', REG_BOOKMARKLET));
+}
+// 接收 bookmarklet 回传的 token
+window.addEventListener('message', (e) => {
+  if (!e.data || e.data.type !== 'registration_token') return;
+  if (e.data.success && e.data.data && e.data.data.access_token) {
+    regAccessToken = e.data.data.access_token;
+    sessionStorage.setItem('portal_reg_token_' + sysUserId, regAccessToken);
+    updateRegAuthStatus();
+    toast('✅ 登记系统已授权，现在可以提交登记系统任务了');
+  } else {
+    toast(e.data.message || '获取授权失败，请确保已登录登记系统', true);
+  }
+});
+
+// ---------- 验证码提交 ----------
+async function submitTfa() {
+  const inp = document.getElementById('dTfaInput');
+  const code = inp.value.trim();
+  if (!code) { toast('请输入验证码', true); return; }
+  const btn = document.getElementById('dTfaBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    await api('submit_tfa', { task_id: currentDetailId, code });
+    inp.value = '';
+    document.getElementById('dTfaWrap').style.display = 'none';
+    toast('✅ 验证码已提交，正在继续登录...');
+  } catch(e) { toast('提交失败：' + e.message, true); }
+  btn.disabled = false; btn.textContent = '提交';
+}
+
+// ---------- 页签切换 ----------
+function switchTab(tab) {
+  document.querySelectorAll('.nav-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('tab-process').style.display = tab === 'process' ? '' : 'none';
+  document.getElementById('tab-config').style.display = tab === 'config' ? '' : 'none';
+  if (tab === 'config' && !cfgLoaded) loadConfig(currentCfg);
+}
+
+// ---------- 配置管理 ----------
+let currentCfg = 'fee_code';
+let cfgLoaded = false;
+document.getElementById('cfgTabs').addEventListener('click', (e) => {
+  const b = e.target.closest('.cfg-tab'); if (!b) return;
+  document.querySelectorAll('.cfg-tab').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  currentCfg = b.dataset.cfg;
+  loadConfig(currentCfg);
+});
+
+async function waitConfigResult(requestId, timeoutMs) {
+  const deadline = Date.now() + (timeoutMs || 40000);
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 2000));
+    const d = await api('config_result', { request_id: requestId });
+    if (d.state === 'completed') return d.result || {};
+    if (d.state === 'failed') throw new Error(d.error || '执行失败');
+  }
+  throw new Error('等待处理主机响应超时，请确认主机在线后重试');
+}
+
+async function loadConfig(name) {
+  const wrap = document.getElementById('cfgTableWrap');
+  const st = document.getElementById('cfgStatus');
+  st.textContent = '正在从处理主机读取配置...';
+  wrap.innerHTML = '';
+  document.getElementById('cfgSave').style.display = 'none';
+  document.getElementById('cfgAddRow').style.display = 'none';
+  try {
+    const { request_id } = await api('config_request', { op: 'read', mapping_name: name });
+    const result = await waitConfigResult(request_id);
+    cfgLoaded = true;
+    renderCfgTable(result.headers || [], result.rows || []);
+    st.textContent = `共 ${(result.rows || []).length} 行` + (adminCode ? '（管理模式：单元格可直接编辑）' : '（只读，编辑需管理员）');
+    if (adminCode) {
+      document.getElementById('cfgSave').style.display = '';
+      document.getElementById('cfgAddRow').style.display = '';
+    }
+  } catch(e) {
+    st.textContent = '读取失败：' + e.message;
+  }
+}
+
+function renderCfgTable(headers, rows) {
+  const editable = !!adminCode;
+  const th = headers.map(h => `<th>${esc(h)}</th>`).join('') + (editable ? '<th></th>' : '');
+  const trs = rows.map(r => {
+    const tds = headers.map((_, ci) =>
+      `<td ${editable ? 'contenteditable="true"' : ''}>${esc(r[ci] !== undefined ? r[ci] : '')}</td>`).join('');
+    return `<tr>${tds}${editable ? '<td><button class="row-del" title="删除此行">✕</button></td>' : ''}</tr>`;
+  }).join('');
+  document.getElementById('cfgTableWrap').innerHTML =
+    `<table class="cfg-table"><thead><tr>${th}</tr></thead><tbody id="cfgTbody">${trs}</tbody></table>`;
+}
+document.getElementById('cfgTableWrap').addEventListener('click', (e) => {
+  const b = e.target.closest('.row-del'); if (!b) return;
+  if (confirm('删除此行？（保存后生效）')) b.closest('tr').remove();
+});
+function cfgAddRow() {
+  const tbody = document.getElementById('cfgTbody');
+  if (!tbody) return;
+  const nCols = document.querySelectorAll('.cfg-table thead th').length - 1;
+  const tr = document.createElement('tr');
+  tr.innerHTML = Array.from({length: nCols}, () => '<td contenteditable="true"></td>').join('') +
+    '<td><button class="row-del" title="删除此行">✕</button></td>';
+  tbody.insertBefore(tr, tbody.firstChild);
+  tr.querySelector('td').focus();
+}
+async function saveConfig() {
+  if (!adminCode) { toast('编辑配置需要管理员模式', true); return; }
+  const headers = Array.from(document.querySelectorAll('.cfg-table thead th'))
+    .slice(0, -1).map(th => th.textContent);
+  const rows = Array.from(document.querySelectorAll('#cfgTbody tr')).map(tr =>
+    Array.from(tr.querySelectorAll('td')).slice(0, headers.length).map(td => td.textContent.trim())
+  ).filter(r => r.some(c => c !== ''));
+  if (!confirm(`确认保存「${document.querySelector('.cfg-tab.active').textContent}」共 ${rows.length} 行？\n将直接写入处理主机的配置文件，影响所有人的处理结果。`)) return;
+  const btn = document.getElementById('cfgSave');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 保存中...';
+  const st = document.getElementById('cfgStatus');
+  try {
+    const { request_id } = await api('config_request',
+      { op: 'write', mapping_name: currentCfg, headers, rows });
+    const result = await waitConfigResult(request_id, 60000);
+    toast('✅ ' + (result.message || '配置已保存'));
+    st.textContent = result.message || '已保存';
+  } catch(e) {
+    toast('保存失败：' + e.message, true);
+    st.textContent = '保存失败：' + e.message;
+  }
+  btn.disabled = false; btn.textContent = '保存到系统';
+}
+
+// ---------- 自动登录 ----------
+(async function init() {
+  // 回填登录门各字段（便于修改密码）
+  if (sysUserId) document.getElementById('gateSysUser').value = sysUserId;
+  const sp = localStorage.getItem('portal_sys_pass');
+  if (sp) document.getElementById('gateSysPass').value = b64d(sp);
+  const cnu = localStorage.getItem('portal_cn_user');
+  if (cnu) document.getElementById('gateCnUser').value = cnu;
+  const cnp = localStorage.getItem('portal_cn_pass');
+  if (cnp) document.getElementById('gateCnPass').value = b64d(cnp);
+  // 恢复本会话该账号的登记系统授权
+  if (sysUserId) regAccessToken = sessionStorage.getItem('portal_reg_token_' + sysUserId) || '';
+  if (accessCode && userName && sysUserId) {
+    try { await api('login'); document.getElementById('gateName').value = userName; enterPortal(); return; }
+    catch(e) { accessCode = ''; localStorage.removeItem('portal_code'); }
+  }
+  if (userName) document.getElementById('gateName').value = userName;
+})();
+</script>
+</body>
+</html>
