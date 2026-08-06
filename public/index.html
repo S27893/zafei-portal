@@ -1047,14 +1047,12 @@ document.getElementById('overlay').addEventListener('click', async e => {
   const old = b.textContent;
   b.disabled = true; b.textContent = '下载中...';
   try {
-    const { name, content_base64 } = await api('download', { path: b.dataset.dl });
-    const bytes = Uint8Array.from(atob(content_base64), c => c.charCodeAt(0));
-    const blob = new Blob([bytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const { name, url } = await api('download', { path: b.dataset.dl });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = b.dataset.nm || name;
     a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    setTimeout(() => a.remove(), 4000);
     toast('✅ 已开始下载：' + (b.dataset.nm || name));
   } catch(err) { toast('下载失败：' + err.message, true); }
   b.disabled = false; b.textContent = old;
