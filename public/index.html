@@ -1047,16 +1047,9 @@ document.getElementById('overlay').addEventListener('click', async e => {
   const old = b.textContent;
   b.disabled = true; b.textContent = '下载中...';
   try {
-    const { name, url } = await api('download', { path: b.dataset.dl });
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = b.dataset.nm || name;
-    a.click();
-    setTimeout(() => { URL.revokeObjectURL(blobUrl); a.remove(); }, 4000);
+    const { name } = await api('download', { path: b.dataset.dl });
+    const dlUrl = API.replace('/api', '/download') + '?path=' + encodeURIComponent(b.dataset.dl) + '&access_code=' + encodeURIComponent(accessCode) + '&viewer=' + encodeURIComponent(sysUserId || '');
+    window.open(dlUrl, '_blank');
     toast('✅ 已开始下载：' + (b.dataset.nm || name));
   } catch(err) { toast('下载失败：' + err.message, true); }
   b.disabled = false; b.textContent = old;
