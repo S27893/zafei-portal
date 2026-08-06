@@ -1048,11 +1048,15 @@ document.getElementById('overlay').addEventListener('click', async e => {
   b.disabled = true; b.textContent = '下载中...';
   try {
     const { name, url } = await api('download', { path: b.dataset.dl });
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
+    a.href = blobUrl;
     a.download = b.dataset.nm || name;
     a.click();
-    setTimeout(() => a.remove(), 4000);
+    setTimeout(() => { URL.revokeObjectURL(blobUrl); a.remove(); }, 4000);
     toast('✅ 已开始下载：' + (b.dataset.nm || name));
   } catch(err) { toast('下载失败：' + err.message, true); }
   b.disabled = false; b.textContent = old;
