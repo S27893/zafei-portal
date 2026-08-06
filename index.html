@@ -1048,7 +1048,7 @@ document.getElementById('overlay').addEventListener('click', async e => {
   b.disabled = true; b.textContent = '下载中...';
   try {
     const { name } = await api('download', { path: b.dataset.dl });
-    const dlUrl = API.replace('/api', '/download') + '?path=' + encodeURIComponent(b.dataset.dl) + '&access_code=' + encodeURIComponent(accessCode) + '&viewer=' + encodeURIComponent(sysUserId || '');
+    const dlUrl = API + '/download?path=' + encodeURIComponent(b.dataset.dl) + '&access_code=' + encodeURIComponent(accessCode) + '&viewer=' + encodeURIComponent(sysUserId || '');
     window.open(dlUrl, '_blank');
     toast('✅ 已开始下载：' + (b.dataset.nm || name));
   } catch(err) { toast('下载失败：' + err.message, true); }
