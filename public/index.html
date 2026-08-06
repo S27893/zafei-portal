@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>杂费加收云端处理门户</title>
 <meta name="description" content="4PX 杂费加收云端处理门户：随时发起处理、查看进度、下载结果文件。">
-<link rel="icon" type="image/png" href="/images/logo.png">
+<link rel="icon" type="image/png" href="images/logo.png">
 <style>
 /* ============ 设计系统令牌 ============ */
 :root {
@@ -394,7 +394,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
 <!-- ============ 登录门 ============ -->
 <div class="gate" id="gate">
   <div class="gate-card">
-    <img src="/images/logo.png" alt="杂费加收云端处理门户标志">
+    <img src="images/logo.png" alt="杂费加收云端处理门户标志">
     <h1>杂费加收云端处理门户</h1>
     <p class="desc">固定链接 · 任意网络可用 · 结果云端留存</p>
     <div class="field">
@@ -431,7 +431,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
 <!-- ============ 顶栏 ============ -->
 <header class="topbar" style="display:none" id="topbar">
   <div class="container topbar-inner">
-    <img class="logo" src="/images/logo.png" alt="logo">
+    <img class="logo" src="images/logo.png" alt="logo">
     <div>
       <div class="title">杂费加收云端处理门户</div>
       <div class="sub">发起处理 · 查看进度 · 下载结果</div>
@@ -507,7 +507,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
   <section class="card">
     <div class="card-head"><h2>📑 任务记录</h2><span class="hint">自动刷新 · 点击任务查看详情与下载</span></div>
     <div id="taskWrap">
-      <div class="empty-state"><img src="/images/empty.png" alt="暂无任务" loading="lazy"><p>还没有任务，提交第一个处理任务吧</p></div>
+      <div class="empty-state"><img src="images/empty.png" alt="暂无任务" loading="lazy"><p>还没有任务，提交第一个处理任务吧</p></div>
     </div>
   </section>
   </div>
@@ -600,7 +600,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
 <div id="toast"></div>
 
 <script>
-const API = '/api';
+const API = 'https://apszyinnbbpsdqzchmuu.supabase.co/functions/v1/zafei-gateway/api';
 const TYPES_ICON = { '':'📋','前后线加收':'🚚','提货费加收':'📦','仓储费加收':'🏭','单独报关费加收':'🛃','登记系统':'📝','凭证预登录':'🔑' };
 let accessCode = localStorage.getItem('portal_code') || '';
 let userName = localStorage.getItem('portal_name') || '';
@@ -858,7 +858,7 @@ async function refreshList() {
 
     const wrap = document.getElementById('taskWrap');
     if (!data.tasks.length) {
-      wrap.innerHTML = `<div class="empty-state"><img src="/images/empty.png" alt="暂无任务" loading="lazy"><p>还没有任务，提交第一个处理任务吧</p></div>`;
+      wrap.innerHTML = `<div class="empty-state"><img src="images/empty.png" alt="暂无任务" loading="lazy"><p>还没有任务，提交第一个处理任务吧</p></div>`;
       return;
     }
     wrap.innerHTML = `<table class="task-table">
@@ -984,7 +984,7 @@ async function renderDetail() {
       const n = f.name || '';
       if (/^直邮前后线杂费客户代码加收/.test(n)) { type = 'upload_no_tracking'; label = '无单号上传计费系统'; cls = ' orange'; }
       else if (/^(前后线仓外通知表|仓外通知)/.test(n) || n.includes('仓外通知')) { type = 'upload_notification'; label = '上传系统'; }
-      else if (n.includes('汇总表') || n.includes('剔除明细')) { type = ''; }  // 报表类不上传
+      else if (n.includes('汇总表') || n.includes('剔除明细') || n.includes('整理模版') || n.includes('整理模板')) { type = ''; }  // 报表类不上传
       else if (/^直邮前后线杂费加收/.test(n)) { type = 'import_ffnc'; label = '上传计费系统+回写'; }
       else { type = 'import_ffnc'; label = '上传系统'; }  // 其余板块（仓储/提货/报关等）：上传计费导入，不回写
       if (!type) return '';
