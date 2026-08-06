@@ -126,6 +126,8 @@ input, select { font-family:var(--font); }
 .btn-up { background:var(--gradient-brand); color:#fff; border:none; }
 .btn-up:disabled { opacity:.5; cursor:not-allowed; }
 .btn-up.orange { background:linear-gradient(135deg,#f59e0b,#d97706); }
+.btn-kill { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+.btn-kill:hover { background:#fee2e2; }
 .act-head {
   padding:10px 14px; border-radius:var(--radius-sm); font-size:13px; font-weight:600;
   border:1px solid var(--border); background:var(--surface-2); margin-bottom:8px;
@@ -546,6 +548,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
     <div class="modal-head">
       <h3 id="dTitle">任务详情</h3>
       <span id="dBadgeWrap"></span>
+      <button class="btn btn-sm btn-kill" id="dKillBtn" style="display:none" data-kill>终止任务</button>
       <button class="modal-close" onclick="closeDetail()">✕</button>
     </div>
     <div class="modal-body">
@@ -862,10 +865,11 @@ async function refreshList() {
       return;
     }
     wrap.innerHTML = `<table class="task-table">
-      <thead><tr><th>板块</th><th>发起人</th>${data.is_admin ? '<th>账号</th>' : ''}<th>提交时间</th><th>状态</th><th>进度</th><th>结果</th></tr></thead>
+      <thead><tr><th>板块</th><th>发起人</th>${data.is_admin ? '<th>账号</th>' : ''}<th>提交时间</th><th>状态</th><th>进度</th><th>结果</th><th>操作</th></tr></thead>
       <tbody>` + data.tasks.map(t => {
         const tp = t.template_type || '全部类型';
         const nOut = (t.output_files || []).length;
+        const canKill = isRunning(t.status) || t.status === 'uploading';
         return `<tr class="task-row" data-id="${t.id}">
           <td class="t-type">${TYPES_ICON[t.template_type] || '📋'} ${esc(tp)}</td>
           <td>${esc(t.created_by || '-')}</td>
@@ -874,11 +878,24 @@ async function refreshList() {
           <td>${badgeHtml(t.status)}</td>
           <td><div class="mini-prog"><i style="width:${t.progress || 0}%"></i></div></td>
           <td class="t-meta">${nOut ? '📄 ' + nOut + ' 个文件' : '-'}</td>
+          <td>${canKill ? `<button class="btn btn-sm btn-kill" data-kill="${t.id}">终止</button>` : ''}</td>
         </tr>`;
       }).join('') + '</tbody></table>';
   } catch(e) { /* 静默，下轮重试 */ }
 }
-document.getElementById('taskWrap').addEventListener('click', e => {
+document.getElementById('taskWrap').addEventListener('click', async e => {
+  const kb = e.target.closest('[data-kill]');
+  if (kb) {
+    e.stopPropagation();
+    if (!confirm('确认终止该任务？终止后标记为失败，无法恢复。')) return;
+    kb.disabled = true; kb.textContent = '...';
+    try {
+      await api('kill_task', { task_id: kb.dataset.kill });
+      toast('✅ 任务已终止');
+      refreshList();
+    } catch(err) { toast('终止失败：' + err.message, true); }
+    return;
+  }
   const tr = e.target.closest('.task-row'); if (tr) openDetail(tr.dataset.id);
 });
 
@@ -949,6 +966,9 @@ async function renderDetail() {
     document.getElementById('dMeta').textContent =
       `发起人 ${t.created_by || '-'} · 提交于 ${fmtTime(t.created_at)}` +
       (t.completed_at ? ` · 完成于 ${fmtTime(t.completed_at)}` : '');
+    // 终止任务按钮：仅在任务进行中显示
+    const killBtn = document.getElementById('dKillBtn');
+    killBtn.style.display = (isRunning(t.status) || t.status === 'uploading') ? '' : 'none';
     // 错误
     const ew = document.getElementById('dErrWrap');
     if (t.status === 'failed' && t.error) { ew.style.display = ''; document.getElementById('dErr').textContent = t.error; }
@@ -1020,6 +1040,20 @@ async function renderDetail() {
   } catch(e) { /* 忽略瞬时错误 */ }
 }
 document.getElementById('overlay').addEventListener('click', async e => {
+  // 终止任务按钮
+  const kb = e.target.closest('[data-kill]');
+  if (kb) {
+    if (!confirm('确认终止该任务？终止后任务标记为失败，无法恢复。')) return;
+    kb.disabled = true; kb.textContent = '终止中...';
+    try {
+      await api('kill_task', { task_id: currentDetailId });
+      toast('✅ 任务已终止');
+      renderDetail();
+      refreshList();
+    } catch(err) { toast('终止失败：' + err.message, true); }
+    kb.disabled = false; kb.textContent = '终止任务';
+    return;
+  }
   // 上传系统按钮
   const ub = e.target.closest('[data-up]');
   if (ub) {
