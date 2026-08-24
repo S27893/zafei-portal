@@ -557,6 +557,12 @@ main.container { padding-top:24px; padding-bottom:60px; }
       <div class="tfa-box" id="dTfaWrap" style="display:none">
         <div class="tfa-t">🔐 需要登录验证码</div>
         <div class="tfa-d" id="dTfaMsg">系统向您的账号发送了验证码，请输入以继续登录。</div>
+        <div id="dTfaImgWrap" style="display:none;margin-bottom:10px">
+          <img id="dTfaImg" alt="验证码"
+               style="height:44px;border:1px solid var(--line);border-radius:6px;background:#fff;vertical-align:middle">
+          <button class="btn btn-sm btn-ghost" style="margin-left:8px"
+                  onclick="refreshTfaCaptcha()">换一张</button>
+        </div>
         <div class="tfa-row">
           <input id="dTfaInput" placeholder="输入验证码" maxlength="10" autocomplete="off"
                  onkeydown="if(event.key==='Enter')submitTfa()">
@@ -958,8 +964,19 @@ async function renderDetail() {
     if (t.status === 'need_2fa' || t.login_state === 'need_2fa') {
       if (tw.style.display === 'none') { tw.style.display = ''; document.getElementById('dTfaInput').focus(); }
       if (t.login_message) document.getElementById('dTfaMsg').textContent = t.login_message;
+      // 图形验证码：直接显示图片，让发起人看图输入（不会收到短信）
+      const iw = document.getElementById('dTfaImgWrap');
+      if (t.captcha_kind === 'image' && t.captcha_image) {
+        const _src = 'data:image/png;base64,' + t.captcha_image;
+        const _img = document.getElementById('dTfaImg');
+        if (_img.getAttribute('src') !== _src) _img.setAttribute('src', _src);
+        iw.style.display = '';
+      } else {
+        iw.style.display = 'none';
+      }
     } else {
       tw.style.display = 'none';
+      document.getElementById('dTfaImgWrap').style.display = 'none';
     }
     // 处理统计（任务完成且有summary时展示）
     const sw = document.getElementById('dStatWrap');
@@ -992,16 +1009,22 @@ async function renderDetail() {
     };
     if (outs.length) {
       ow.style.display = '';
+      const _hasConsol = outs.some(f => (f.name || '').includes('前后线系统杂费加收-整理模版'));
+      const _consolBtn = (t.status === 'completed' && !actBusy && !_hasConsol)
+        ? `<div class="out-item" style="border-top:1px dashed #d4d4d4;margin-top:6px;padding-top:8px">
+             <span class="oname" style="color:#737373">整理模板未生成（文件较大，按需生成）</span>
+             <button class="btn btn-sm btn-up" data-up="generate_consolidation" data-fn="">📊 生成整理模板</button></div>`
+        : '';
       document.getElementById('dOut').innerHTML = outs.map(f =>
         `<div class="out-item">📄 <span class="oname">${esc(f.name)}</span><span class="osize">${fmtSize(f.size)}</span>
          ${uploadBtn(f)}
-         <button class="btn btn-sm btn-dl" data-dl="${esc(f.path)}" data-nm="${esc(f.name)}">下载</button></div>`).join('');
+         <button class="btn btn-sm btn-dl" data-dl="${esc(f.path)}" data-nm="${esc(f.name)}">下载</button></div>`).join('') + _consolBtn;
     } else ow.style.display = 'none';
     // 上传动作状态
     const aw = document.getElementById('dActWrap');
     if (t.action_state) {
       aw.style.display = '';
-      const AN = { import_ffnc: '上传计费系统+回写', upload_notification: '仓外通知上传系统', upload_no_tracking: '无单号上传计费系统' };
+      const AN = { import_ffnc: '上传计费系统+回写', upload_notification: '仓外通知上传系统', upload_no_tracking: '无单号上传计费系统', generate_consolidation: '生成整理模板' };
       const AS = { pending: ['⏳ 排队等待本机执行', 'run'], running: ['🔄 执行中...', 'run'],
                    completed: ['✅ 上传成功', 'ok'], failed: ['❌ 上传失败', 'bad'] };
       const [asText, asCls] = AS[t.action_state] || [t.action_state, ''];
@@ -1027,6 +1050,7 @@ document.getElementById('overlay').addEventListener('click', async e => {
       import_ffnc: '确认将该文件上传到计费系统（ffnc杂费导入）？\n有单号登记文件会额外回写登记系统"已加收"，其余板块只上传不回写。\n上传过程由处理主机自动执行。',
       upload_notification: '确认将仓外通知文件上传到 cs-packet（批量新建→导入）？',
       upload_no_tracking: '确认执行无单号上传？将把「无单号调整导入」文件上传到计费系统生成计费单，并回写登记系统。\n请确认已核对过无单号数据。',
+      generate_consolidation: '确认在处理主机生成「前后线系统杂费加收-整理模版」？\n该文件较大（约30MB+），生成约需1分钟，完成后可在结果文件区下载。',
     };
     if (!confirm(CONFIRM_MSG[ub.dataset.up] || '确认执行上传？')) return;
     ub.disabled = true;
@@ -1099,6 +1123,15 @@ window.addEventListener('message', (e) => {
 });
 
 // ---------- 验证码提交 ----------
+// 换一张图形验证码：借用 tfa 通道发哨兵值，agent 收到后本地换图并回推新图
+async function refreshTfaCaptcha() {
+  try {
+    await api('submit_tfa', { task_id: currentDetailId, code: '__refresh__' });
+    toast('正在换一张验证码...');
+  } catch (e) {
+    toast('换图失败：' + e.message, true);
+  }
+}
 async function submitTfa() {
   const inp = document.getElementById('dTfaInput');
   const code = inp.value.trim();
