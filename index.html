@@ -587,7 +587,10 @@ main.container { padding-top:24px; padding-bottom:60px; }
         </div>
       </div>
       <div id="dOutWrap" style="display:none">
-        <div class="sec-label">📥 结果文件 <span style="font-weight:400;color:var(--text-3)">（云端留存，随时可下载）</span></div>
+        <div class="sec-label">📥 结果文件 <span style="font-weight:400;color:var(--text-3)">（云端留存，随时可下载）</span>
+          <span style="flex:1"></span>
+          <button class="btn btn-sm btn-dl" id="btnDlAll" style="display:none" onclick="downloadAllOutputFiles()">📥 全部下载</button>
+        </div>
         <div class="out-files" id="dOut"></div>
       </div>
       <div id="dActWrap" style="display:none">
@@ -1012,6 +1015,9 @@ async function renderDetail() {
     };
     if (outs.length) {
       ow.style.display = '';
+      // 批量下载按钮：任务完成且未在执行上传动作时显示
+      const btnDlAll = document.getElementById('btnDlAll');
+      if (btnDlAll) btnDlAll.style.display = (t.status === 'completed' && !actBusy) ? '' : 'none';
       document.getElementById('dOut').innerHTML = outs.map(f =>
         `<div class="out-item">📄 <span class="oname">${esc(f.name)}</span><span class="osize">${fmtSize(f.size)}</span>
          ${uploadBtn(f)}
@@ -1088,6 +1094,45 @@ document.getElementById('overlay').addEventListener('click', async e => {
   } catch(err) { toast('下载失败：' + err.message, true); }
   b.disabled = false; b.textContent = old;
 });
+
+// ---------- 批量下载全部输出文件 ----------
+async function downloadAllOutputFiles() {
+  if (!currentDetailId) return;
+  const btn = document.getElementById('btnDlAll');
+  if (!btn) return;
+  try {
+    const { task: t } = await api('get_task', { task_id: currentDetailId });
+    const files = t.output_files || [];
+    if (!files.length) { toast('没有可下载的文件', true); return; }
+    btn.disabled = true;
+    let ok = 0, fail = 0;
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      btn.innerHTML = `<span class="spinner"></span> 下载中 ${i+1}/${files.length}`;
+      try {
+        const { name, content_base64 } = await api('download', { path: f.path });
+        const bytes = Uint8Array.from(atob(content_base64), c => c.charCodeAt(0));
+        const blob = new Blob([bytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = f.name || name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        ok++;
+      } catch(err) {
+        fail++;
+        toast(`下载 ${f.name} 失败：${err.message}`, true);
+      }
+      if (i < files.length - 1) await new Promise(r => setTimeout(r, 800));
+    }
+    if (fail === 0) toast(`✅ 已下载全部 ${ok} 个文件`);
+    else toast(`下载完成：成功 ${ok} 个，失败 ${fail} 个`, fail > 0);
+  } catch(e) {
+    toast('批量下载失败：' + e.message, true);
+  }
+  btn.disabled = false;
+  btn.textContent = '📥 全部下载';
+}
 
 // ---------- 登记系统授权（SSO免密：开链接自动登录成自己 → 书签回传token） ----------
 const REG_URL = 'https://iterative-app-build.1d.alibaba-inc.com/#/query';
