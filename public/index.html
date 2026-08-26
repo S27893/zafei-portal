@@ -1087,15 +1087,21 @@ document.getElementById('overlay').addEventListener('click', async e => {
   const old = b.textContent;
   b.disabled = true; b.textContent = '下载中...';
   try {
-    let dlUrl = API + '/download?path=' + encodeURIComponent(b.dataset.dl) + '&access_code=' + encodeURIComponent(accessCode) + '&viewer=' + encodeURIComponent(sysUserId || '');
-    if (adminCode) dlUrl += '&admin_code=' + encodeURIComponent(adminCode);
-    window.open(dlUrl, '_blank');
+    window.open(buildDownloadUrl(b.dataset.dl), '_blank');
     toast('✅ 已开始下载：' + b.dataset.nm);
   } catch(err) { toast('下载失败：' + err.message, true); }
   b.disabled = false; b.textContent = old;
 });
 
 // ---------- 批量下载全部输出文件 ----------
+// 下载统一走网关 GET 端点（302 → Storage 签名直链）；POST api('download') 已不再返回文件内容
+function buildDownloadUrl(path) {
+  let u = API + '/download?path=' + encodeURIComponent(path)
+        + '&access_code=' + encodeURIComponent(accessCode)
+        + '&viewer=' + encodeURIComponent(sysUserId || '');
+  if (adminCode) u += '&admin_code=' + encodeURIComponent(adminCode);
+  return u;
+}
 async function downloadAllOutputFiles() {
   if (!currentDetailId) return;
   const btn = document.getElementById('btnDlAll');
@@ -1105,28 +1111,17 @@ async function downloadAllOutputFiles() {
     const files = t.output_files || [];
     if (!files.length) { toast('没有可下载的文件', true); return; }
     btn.disabled = true;
-    let ok = 0, fail = 0;
     for (let i = 0; i < files.length; i++) {
-      const f = files[i];
       btn.innerHTML = `<span class="spinner"></span> 下载中 ${i+1}/${files.length}`;
-      try {
-        const { name, content_base64 } = await api('download', { path: f.path });
-        const bytes = Uint8Array.from(atob(content_base64), c => c.charCodeAt(0));
-        const blob = new Blob([bytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = f.name || name;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-        ok++;
-      } catch(err) {
-        fail++;
-        toast(`下载 ${f.name} 失败：${err.message}`, true);
-      }
-      if (i < files.length - 1) await new Promise(r => setTimeout(r, 800));
+      // 用隐藏 iframe 逐个触发，避免多次 window.open 被浏览器拦截
+      const fr = document.createElement('iframe');
+      fr.style.display = 'none';
+      fr.src = buildDownloadUrl(files[i].path);
+      document.body.appendChild(fr);
+      setTimeout(() => fr.remove(), 60000);
+      if (i < files.length - 1) await new Promise(r => setTimeout(r, 1200));
     }
-    if (fail === 0) toast(`✅ 已下载全部 ${ok} 个文件`);
-    else toast(`下载完成：成功 ${ok} 个，失败 ${fail} 个`, fail > 0);
+    toast(`✅ 已触发全部 ${files.length} 个文件下载，请留意浏览器下载栏`);
   } catch(e) {
     toast('批量下载失败：' + e.message, true);
   }
