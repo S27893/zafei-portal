@@ -1113,6 +1113,125 @@ function buildDownloadUrl(path) {
 // 跨域 fetch 读不到 → 用 zafei-dl 换取带 CORS 的签名直链，再直接从 Storage 拉。
 const DL_API = 'https://apszyinnbbpsdqzchmuu.supabase.co/functions/v1/zafei-dl';
 
+// 办公网到海外 Storage 经常只有几十 KB/s 且随时停滞：45s 没有新数据就主动断开，
+// 用 Range 从断点续传（不从头再来）；签名直链 15 分钟过期，过期就重新调 zafei-dl 签一张。
+// 只要有进展就不计失败次数，连续 8 次零进展才放弃。
+async function dlResume(makeUrl, size, onBytes) {
+  if (!size) {                                  // 大小未知：退化成一次性拉取
+    const r = await fetch(await makeUrl());
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const buf = new Uint8Array(await r.arrayBuffer());
+    onBytes(buf.length);
+    return buf;
+  }
+
+  const STALL_MS = 45000, MAX_FAIL = 8;
+  const parts = [];
+  let got = 0, fails = 0;
+  while (got < size) {
+    if (fails >= MAX_FAIL) throw new Error('网络持续中断，已重试多次仍失败');
+    let url;
+    try { url = await makeUrl(); }
+    catch (e) { fails++; await new Promise(r => setTimeout(r, 1500)); continue; }
+    const ac = new AbortController();
+    let timer = setTimeout(() => ac.abort(), STALL_MS);
+    const startGot = got;
+    try {
+      const r = await fetch(url, { headers: got ? { Range: 'bytes=' + got + '-' } : {}, signal: ac.signal });
+      if (r.status !== 200 && r.status !== 206) throw new Error('HTTP ' + r.status);
+      if (got > 0 && r.status === 200) { got = 0; parts.length = 0; }   // 服务器忽略 Range：重来
+      const reader = r.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value); got += value.length; onBytes(value.length);
+        clearTimeout(timer); timer = setTimeout(() => ac.abort(), STALL_MS);
+      }
+    } catch (e) {
+      // 停滞超时 / 网络断：带着已收字节进下一轮续传
+    } finally { clearTimeout(timer); }
+    if (got > startGot) fails = 0; else fails++;
+    if (got < size) await new Promise(r => setTimeout(r, 800));
+  }
+  const out = new Uint8Array(got);
+  let off = 0;
+  for (const p of parts) { out.set(p, off); off += p.length; }
+  return out;
+}
+
+function fmtSpeed(bps) {
+  return bps >= 1048576 ? (bps / 1048576).toFixed(1) + 'MB/s' : Math.max(1, Math.round(bps / 1024)) + 'KB/s';
+}
+
+async function downloadAllOutputFiles() {
+  if (!currentDetailId) return;
+  const btn = document.getElementById('btnDlAll');
+  if (!btn) return;
+  btn.disabled = true;
+  const restore = () => { btn.disabled = false; btn.textContent = '📦 打包下载(zip)'; };
+  try {
+    const { task: t } = await api('get_task', { task_id: currentDetailId });
+    // 小文件排前面：前几个几秒就下完，最慢的大文件在最后（进度不会一上来就卡住）
+    const files = (t.output_files || []).slice().sort((a, b) => (a.size || 0) - (b.size || 0));
+    if (!files.length) { toast('没有可下载的文件', true); restore(); return; }
+    const total = files.reduce((s, f) => s + (f.size || 0), 0);
+    btn.innerHTML = `<span class="spinner"></span> 获取链接...`;
+    const sign = async (paths) => {
+      const body = { access_code: accessCode, viewer: sysUserId || '', paths };
+      if (adminCode) body.admin_code = adminCode;
+      const res = await fetch(DL_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
+      return d.files || [];
+    };
+    const list = await sign(files.map(f => f.path));
+    if (!list.length) throw new Error('未获取到可下载链接');
+    const byPath = {};
+    for (const f of list) byPath[f.path] = f;
+    // 滚动窗口算实时速度；显示总进度（字节）而不是文件计数，慢网络下才看得出在动
+    let done = 0, winBytes = 0, winT = Date.now(), t0 = Date.now();
+    const setLabel = (i) => {
+      const now = Date.now();
+      let spd = 0;
+      if (now - winT >= 1000) { spd = winBytes / ((now - winT) / 1000); winBytes = 0; winT = now; }
+      btn.innerHTML = `<span class="spinner"></span> ${i + 1}/${list.length} · ${fmtSize(done)}/${fmtSize(total)}${spd ? ' · ' + fmtSpeed(spd) : ''}`;
+    };
+    const entries = [], used = {};
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i];
+      const sz = Number(f.size) || Number((files.find(x => x.path === f.path) || {}).size) || 0;
+      const mkUrl = async () => {
+        const arr = await sign([f.path]);       // 每次续传重新签，避免直链 15 分钟过期
+        if (!arr.length || !arr[0].url) throw new Error('重新签名失败');
+        return arr[0].url;
+      };
+      const data = await dlResume(mkUrl, sz, (n) => { done += n; winBytes += n; setLabel(i); });
+      let nm = f.name;
+      if (used[nm]) {                            // 同名文件加序号，避免 zip 内条目重复
+        const dot = nm.lastIndexOf('.');
+        nm = dot > 0 ? `${nm.slice(0, dot)}(${used[nm]})${nm.slice(dot)}` : `${nm}(${used[nm]})`;
+      }
+      used[f.name] = (used[f.name] || 0) + 1;
+      entries.push({ name: nm, data });
+    }
+    btn.innerHTML = `<span class="spinner"></span> 打包中...`;
+    const blob = makeZip(entries);
+    const day = String(t.created_at || '').slice(0, 10).replace(/-/g, '');
+    const zipName = `${t.template_type || '杂费加收'}_${day}_${currentDetailId.slice(0, 8)}.zip`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = zipName;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+    const el = Math.round((Date.now() - t0) / 1000);
+    const elStr = el >= 60 ? `${Math.floor(el / 60)}分${el % 60}秒` : `${el}秒`;
+    toast(`✅ 已打包 ${entries.length} 个文件（${fmtSize(total)}，耗时 ${elStr}）：${zipName}`);
+  } catch (e) {
+    toast('打包下载失败：' + e.message, true);
+  }
+  restore();
+}
+
 // 零依赖 ZIP 打包（store 模式，不压缩）：公司网屏蔽了 cdnjs/jsdelivr/unpkg，
 // JSZip 之类的库根本加载不出来；xlsx 本身已是压缩包，store 不会明显增大体积。
 let _crcTable = null;
@@ -1168,56 +1287,6 @@ function makeZip(entries) {
   ev.setUint16(8, entries.length, true); ev.setUint16(10, entries.length, true);
   ev.setUint32(12, cdSize, true); ev.setUint32(16, offset, true);
   return new Blob([...parts, ...central, eocd], { type: 'application/zip' });
-}
-
-async function downloadAllOutputFiles() {
-  if (!currentDetailId) return;
-  const btn = document.getElementById('btnDlAll');
-  if (!btn) return;
-  btn.disabled = true;
-  try {
-    const { task: t } = await api('get_task', { task_id: currentDetailId });
-    const files = t.output_files || [];
-    if (!files.length) { toast('没有可下载的文件', true); btn.disabled = false; btn.textContent = '📦 打包下载(zip)'; return; }
-    btn.innerHTML = `<span class="spinner"></span> 获取链接...`;
-    const body = { access_code: accessCode, viewer: sysUserId || '', paths: files.map(f => f.path) };
-    if (adminCode) body.admin_code = adminCode;
-    const res = await fetch(DL_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
-    const list = d.files || [];
-    if (!list.length) throw new Error('未获取到可下载链接');
-    const entries = [], used = {};
-    let total = 0;
-    for (let i = 0; i < list.length; i++) {
-      btn.innerHTML = `<span class="spinner"></span> 下载中 ${i + 1}/${list.length}`;
-      const r = await fetch(list[i].url);
-      if (!r.ok) throw new Error(`${list[i].name} 下载失败 (${r.status})`);
-      const data = new Uint8Array(await r.arrayBuffer());
-      let nm = list[i].name;
-      if (used[nm]) {                            // 同名文件加序号，避免 zip 内条目重复
-        const dot = nm.lastIndexOf('.');
-        nm = dot > 0 ? `${nm.slice(0, dot)}(${used[nm]})${nm.slice(dot)}` : `${nm}(${used[nm]})`;
-      }
-      used[list[i].name] = (used[list[i].name] || 0) + 1;
-      entries.push({ name: nm, data });
-      total += data.length;
-    }
-    btn.innerHTML = `<span class="spinner"></span> 打包中...`;
-    const blob = makeZip(entries);
-    const day = String(t.created_at || '').slice(0, 10).replace(/-/g, '');
-    const zipName = `${t.template_type || '杂费加收'}_${day}_${currentDetailId.slice(0, 8)}.zip`;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = zipName;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 20000);
-    toast(`✅ 已打包 ${entries.length} 个文件（${fmtSize(total)}）：${zipName}`);
-  } catch (e) {
-    toast('打包下载失败：' + e.message, true);
-  }
-  btn.disabled = false;
-  btn.textContent = '📦 打包下载(zip)';
 }
 
 // ---------- 登记系统授权（SSO免密：开链接自动登录成自己 → 书签回传token） ----------
