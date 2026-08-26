@@ -1006,7 +1006,7 @@ async function renderDetail() {
       let type = '', label = '', cls = '';
       const n = f.name || '';
       if (/^直邮前后线杂费客户代码加收/.test(n)) { type = 'upload_no_tracking'; label = '无单号上传计费系统'; cls = ' orange'; }
-      else if (/^(前后线仓外通知表|仓外通知)/.test(n) || n.includes('仓外通知')) { type = 'upload_notification'; label = '上传系统'; }
+      else if (/^(前后线仓外通知表|仓外通知|NotifyAbnormal)/i.test(n) || n.includes('仓外通知')) { type = 'upload_notification'; label = '上传系统'; }
       else if (n.includes('汇总表') || n.includes('剔除明细') || n.includes('整理模版') || n.includes('整理模板')) { type = ''; }  // 报表类不上传
       else if (/^直邮前后线杂费加收/.test(n)) { type = 'import_ffnc'; label = '上传计费系统+回写'; }
       else { type = 'import_ffnc'; label = '上传系统'; }  // 其余板块（仓储/提货/报关等）：上传计费导入，不回写
