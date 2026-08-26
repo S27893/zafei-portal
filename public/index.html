@@ -1018,16 +1018,22 @@ async function renderDetail() {
       // 批量下载按钮：任务完成且未在执行上传动作时显示
       const btnDlAll = document.getElementById('btnDlAll');
       if (btnDlAll) btnDlAll.style.display = (t.status === 'completed' && !actBusy) ? '' : 'none';
+      const _hasConsol = outs.some(f => (f.name || '').includes('前后线系统杂费加收-整理模版'));
+      const _consolBtn = (t.status === 'completed' && !actBusy && !_hasConsol)
+        ? `<div class="out-item" style="border-top:1px dashed #d4d4d4;margin-top:6px;padding-top:8px">
+             <span class="oname" style="color:#737373">整理模板未生成（文件较大，按需生成）</span>
+             <button class="btn btn-sm btn-up" data-up="generate_consolidation" data-fn="">📊 生成整理模板</button></div>`
+        : '';
       document.getElementById('dOut').innerHTML = outs.map(f =>
         `<div class="out-item">📄 <span class="oname">${esc(f.name)}</span><span class="osize">${fmtSize(f.size)}</span>
          ${uploadBtn(f)}
-         <button class="btn btn-sm btn-dl" data-dl="${esc(f.path)}" data-nm="${esc(f.name)}">下载</button></div>`).join('');
+         <button class="btn btn-sm btn-dl" data-dl="${esc(f.path)}" data-nm="${esc(f.name)}">下载</button></div>`).join('') + _consolBtn;
     } else ow.style.display = 'none';
     // 上传动作状态
     const aw = document.getElementById('dActWrap');
     if (t.action_state) {
       aw.style.display = '';
-      const AN = { import_ffnc: '上传计费系统+回写', upload_notification: '仓外通知上传系统', upload_no_tracking: '无单号上传计费系统' };
+      const AN = { import_ffnc: '上传计费系统+回写', upload_notification: '仓外通知上传系统', upload_no_tracking: '无单号上传计费系统', generate_consolidation: '生成整理模板' };
       const AS = { pending: ['⏳ 排队等待本机执行', 'run'], running: ['🔄 执行中...', 'run'],
                    completed: ['✅ 上传成功', 'ok'], failed: ['❌ 上传失败', 'bad'] };
       const [asText, asCls] = AS[t.action_state] || [t.action_state, ''];
@@ -1067,6 +1073,7 @@ document.getElementById('overlay').addEventListener('click', async e => {
       import_ffnc: '确认将该文件上传到计费系统（ffnc杂费导入）？\n有单号登记文件会额外回写登记系统"已加收"，其余板块只上传不回写。\n上传过程由处理主机自动执行。',
       upload_notification: '确认将仓外通知文件上传到 cs-packet（批量新建→导入）？',
       upload_no_tracking: '确认执行无单号上传？将把「无单号调整导入」文件上传到计费系统生成计费单，并回写登记系统。\n请确认已核对过无单号数据。',
+      generate_consolidation: '确认在处理主机生成「前后线系统杂费加收-整理模版」？\n该文件较大（约30MB+），生成约需1分钟，完成后可在结果文件区下载。',
     };
     if (!confirm(CONFIRM_MSG[ub.dataset.up] || '确认执行上传？')) return;
     ub.disabled = true;
