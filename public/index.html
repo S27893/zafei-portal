@@ -1062,9 +1062,12 @@ document.getElementById('overlay').addEventListener('click', async e => {
     if (!confirm(CONFIRM_MSG[ub.dataset.up] || '确认执行上传？')) return;
     ub.disabled = true;
     try {
-      await api('request_upload', {
-        task_id: currentDetailId, upload_type: ub.dataset.up, filename: ub.dataset.fn,
-      });
+      const uploadPayload = { task_id: currentDetailId, upload_type: ub.dataset.up, filename: ub.dataset.fn };
+      // 登记系统回写需要有效token：把当前授权一起传给本机
+      if (['import_ffnc', 'upload_no_tracking'].includes(ub.dataset.up) && regAccessToken) {
+        uploadPayload.reg_access_token = regAccessToken;
+      }
+      await api('request_upload', uploadPayload);
       toast('✅ 上传指令已下发，处理主机将自动执行');
       if (!detailTimer) detailTimer = setInterval(renderDetail, 2500);
       renderDetail();
