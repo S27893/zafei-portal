@@ -126,8 +126,6 @@ input, select { font-family:var(--font); }
 .btn-up { background:var(--gradient-brand); color:#fff; border:none; }
 .btn-up:disabled { opacity:.5; cursor:not-allowed; }
 .btn-up.orange { background:linear-gradient(135deg,#f59e0b,#d97706); }
-.btn-kill { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
-.btn-kill:hover { background:#fee2e2; }
 .act-head {
   padding:10px 14px; border-radius:var(--radius-sm); font-size:13px; font-weight:600;
   border:1px solid var(--border); background:var(--surface-2); margin-bottom:8px;
@@ -548,7 +546,6 @@ main.container { padding-top:24px; padding-bottom:60px; }
     <div class="modal-head">
       <h3 id="dTitle">任务详情</h3>
       <span id="dBadgeWrap"></span>
-      <button class="btn btn-sm btn-kill" id="dKillBtn" style="display:none" data-kill>终止任务</button>
       <button class="modal-close" onclick="closeDetail()">✕</button>
     </div>
     <div class="modal-body">
@@ -560,6 +557,12 @@ main.container { padding-top:24px; padding-bottom:60px; }
       <div class="tfa-box" id="dTfaWrap" style="display:none">
         <div class="tfa-t">🔐 需要登录验证码</div>
         <div class="tfa-d" id="dTfaMsg">系统向您的账号发送了验证码，请输入以继续登录。</div>
+        <div id="dTfaImgWrap" style="display:none;margin-bottom:10px">
+          <img id="dTfaImg" alt="验证码"
+               style="height:44px;border:1px solid var(--line);border-radius:6px;background:#fff;vertical-align:middle">
+          <button class="btn btn-sm btn-ghost" style="margin-left:8px"
+                  onclick="refreshTfaCaptcha()">换一张</button>
+        </div>
         <div class="tfa-row">
           <input id="dTfaInput" placeholder="输入验证码" maxlength="10" autocomplete="off"
                  onkeydown="if(event.key==='Enter')submitTfa()">
@@ -589,7 +592,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
       <div id="dOutWrap" style="display:none">
         <div class="sec-label">📥 结果文件 <span style="font-weight:400;color:var(--text-3)">（云端留存，随时可下载）</span>
           <span style="flex:1"></span>
-          <button class="btn btn-sm btn-dl" id="btnDlAll" style="display:none" onclick="downloadAllOutputFiles()">📦 打包下载(zip)</button>
+          <button class="btn btn-sm btn-dl" id="btnDlAll" style="display:none" onclick="downloadAllOutputFiles()">📥 全部下载</button>
         </div>
         <div class="out-files" id="dOut"></div>
       </div>
@@ -763,7 +766,7 @@ function enterPortal() {
     `XMS/计费：${sysUserId}　|　菜鸟工单：${cn || '未设置'}`;
   if (adminCode) document.getElementById('adminBtn').textContent = '退出管理';
   refreshList();
-  listTimer = setInterval(refreshList, 8000);
+  listTimer = setInterval(refreshList, 4000);
 }
 
 // ---------- 板块选择 ----------
@@ -824,6 +827,7 @@ async function submitTask() {
   const creds = getCreds();
   if (!creds.sys_password) { toast('登录凭证已失效，请退出后重新进入门户', true); return; }
   if (isReg && !regAccessToken) { toast('请先在下方点"去授权"，用您自己的登记系统身份授权', true); return; }
+  if (isReg && _isJwtExpired(regAccessToken)) { toast('登记系统授权已过期，请重新点"去授权"后再提交', true); return; }
   const btn = document.getElementById('submitBtn');
   const note = document.getElementById('submitNote');
   btn.disabled = true;
@@ -868,11 +872,10 @@ async function refreshList() {
       return;
     }
     wrap.innerHTML = `<table class="task-table">
-      <thead><tr><th>板块</th><th>发起人</th>${data.is_admin ? '<th>账号</th>' : ''}<th>提交时间</th><th>状态</th><th>进度</th><th>结果</th><th>操作</th></tr></thead>
+      <thead><tr><th>板块</th><th>发起人</th>${data.is_admin ? '<th>账号</th>' : ''}<th>提交时间</th><th>状态</th><th>进度</th><th>结果</th></tr></thead>
       <tbody>` + data.tasks.map(t => {
         const tp = t.template_type || '全部类型';
         const nOut = (t.output_files || []).length;
-        const canKill = isRunning(t.status) || t.status === 'uploading';
         return `<tr class="task-row" data-id="${t.id}">
           <td class="t-type">${TYPES_ICON[t.template_type] || '📋'} ${esc(tp)}</td>
           <td>${esc(t.created_by || '-')}</td>
@@ -881,24 +884,11 @@ async function refreshList() {
           <td>${badgeHtml(t.status)}</td>
           <td><div class="mini-prog"><i style="width:${t.progress || 0}%"></i></div></td>
           <td class="t-meta">${nOut ? '📄 ' + nOut + ' 个文件' : '-'}</td>
-          <td>${canKill ? `<button class="btn btn-sm btn-kill" data-kill="${t.id}">终止</button>` : ''}</td>
         </tr>`;
       }).join('') + '</tbody></table>';
   } catch(e) { /* 静默，下轮重试 */ }
 }
-document.getElementById('taskWrap').addEventListener('click', async e => {
-  const kb = e.target.closest('[data-kill]');
-  if (kb) {
-    e.stopPropagation();
-    if (!confirm('确认终止该任务？终止后标记为失败，无法恢复。')) return;
-    kb.disabled = true; kb.textContent = '...';
-    try {
-      await api('kill_task', { task_id: kb.dataset.kill });
-      toast('✅ 任务已终止');
-      refreshList();
-    } catch(err) { toast('终止失败：' + err.message, true); }
-    return;
-  }
+document.getElementById('taskWrap').addEventListener('click', e => {
   const tr = e.target.closest('.task-row'); if (tr) openDetail(tr.dataset.id);
 });
 
@@ -969,9 +959,6 @@ async function renderDetail() {
     document.getElementById('dMeta').textContent =
       `发起人 ${t.created_by || '-'} · 提交于 ${fmtTime(t.created_at)}` +
       (t.completed_at ? ` · 完成于 ${fmtTime(t.completed_at)}` : '');
-    // 终止任务按钮：仅在任务进行中显示
-    const killBtn = document.getElementById('dKillBtn');
-    killBtn.style.display = (isRunning(t.status) || t.status === 'uploading') ? '' : 'none';
     // 错误
     const ew = document.getElementById('dErrWrap');
     if (t.status === 'failed' && t.error) { ew.style.display = ''; document.getElementById('dErr').textContent = t.error; }
@@ -981,8 +968,19 @@ async function renderDetail() {
     if (t.status === 'need_2fa' || t.login_state === 'need_2fa') {
       if (tw.style.display === 'none') { tw.style.display = ''; document.getElementById('dTfaInput').focus(); }
       if (t.login_message) document.getElementById('dTfaMsg').textContent = t.login_message;
+      // 图形验证码：直接显示图片，让发起人看图输入（不会收到短信）
+      const iw = document.getElementById('dTfaImgWrap');
+      if (t.captcha_kind === 'image' && t.captcha_image) {
+        const _src = 'data:image/png;base64,' + t.captcha_image;
+        const _img = document.getElementById('dTfaImg');
+        if (_img.getAttribute('src') !== _src) _img.setAttribute('src', _src);
+        iw.style.display = '';
+      } else {
+        iw.style.display = 'none';
+      }
     } else {
       tw.style.display = 'none';
+      document.getElementById('dTfaImgWrap').style.display = 'none';
     }
     // 处理统计（任务完成且有summary时展示）
     const sw = document.getElementById('dStatWrap');
@@ -1007,7 +1005,7 @@ async function renderDetail() {
       const n = f.name || '';
       if (/^直邮前后线杂费客户代码加收/.test(n)) { type = 'upload_no_tracking'; label = '无单号上传计费系统'; cls = ' orange'; }
       else if (/^(前后线仓外通知表|仓外通知|NotifyAbnormal)/i.test(n) || n.includes('仓外通知')) { type = 'upload_notification'; label = '上传系统'; }
-      else if (n.includes('汇总表') || n.includes('剔除明细') || n.includes('整理模版') || n.includes('整理模板')) { type = ''; }  // 报表类不上传
+      else if (n.includes('汇总表') || n.includes('剔除明细')) { type = ''; }  // 报表类不上传
       else if (/^直邮前后线杂费加收/.test(n)) { type = 'import_ffnc'; label = '上传计费系统+回写'; }
       else { type = 'import_ffnc'; label = '上传系统'; }  // 其余板块（仓储/提货/报关等）：上传计费导入，不回写
       if (!type) return '';
@@ -1052,20 +1050,6 @@ async function renderDetail() {
   } catch(e) { /* 忽略瞬时错误 */ }
 }
 document.getElementById('overlay').addEventListener('click', async e => {
-  // 终止任务按钮
-  const kb = e.target.closest('[data-kill]');
-  if (kb) {
-    if (!confirm('确认终止该任务？终止后任务标记为失败，无法恢复。')) return;
-    kb.disabled = true; kb.textContent = '终止中...';
-    try {
-      await api('kill_task', { task_id: currentDetailId });
-      toast('✅ 任务已终止');
-      renderDetail();
-      refreshList();
-    } catch(err) { toast('终止失败：' + err.message, true); }
-    kb.disabled = false; kb.textContent = '终止任务';
-    return;
-  }
   // 上传系统按钮
   const ub = e.target.closest('[data-up]');
   if (ub) {
@@ -1095,13 +1079,13 @@ document.getElementById('overlay').addEventListener('click', async e => {
   b.disabled = true; b.textContent = '下载中...';
   try {
     window.open(buildDownloadUrl(b.dataset.dl), '_blank');
-    toast('✅ 已开始下载：' + b.dataset.nm);
+    toast('✅ 已开始下载：' + (b.dataset.nm || ''));
   } catch(err) { toast('下载失败：' + err.message, true); }
   b.disabled = false; b.textContent = old;
 });
 
-// ---------- 批量下载：打包成一个 zip ----------
-// 单文件下载走网关 GET 端点（302 → Storage 签名直链）
+// ---------- 批量下载全部输出文件 ----------
+// 下载统一走网关 GET 端点（302 → Storage 签名直链）；POST api('download') 已不再返回文件内容
 function buildDownloadUrl(path) {
   let u = API + '/download?path=' + encodeURIComponent(path)
         + '&access_code=' + encodeURIComponent(accessCode)
@@ -1109,184 +1093,31 @@ function buildDownloadUrl(path) {
   if (adminCode) u += '&admin_code=' + encodeURIComponent(adminCode);
   return u;
 }
-// 批量下载要在浏览器里拿到文件字节才能打包，而网关的 302 响应不带 CORS 头，
-// 跨域 fetch 读不到 → 用 zafei-dl 换取带 CORS 的签名直链，再直接从 Storage 拉。
-const DL_API = 'https://apszyinnbbpsdqzchmuu.supabase.co/functions/v1/zafei-dl';
-
-// 办公网到海外 Storage 经常只有几十 KB/s 且随时停滞：45s 没有新数据就主动断开，
-// 用 Range 从断点续传（不从头再来）；签名直链 15 分钟过期，过期就重新调 zafei-dl 签一张。
-// 只要有进展就不计失败次数，连续 8 次零进展才放弃。
-async function dlResume(makeUrl, size, onBytes) {
-  if (!size) {                                  // 大小未知：退化成一次性拉取
-    const r = await fetch(await makeUrl());
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const buf = new Uint8Array(await r.arrayBuffer());
-    onBytes(buf.length);
-    return buf;
-  }
-
-  const STALL_MS = 45000, MAX_FAIL = 8;
-  const parts = [];
-  let got = 0, fails = 0;
-  while (got < size) {
-    if (fails >= MAX_FAIL) throw new Error('网络持续中断，已重试多次仍失败');
-    let url;
-    try { url = await makeUrl(); }
-    catch (e) { fails++; await new Promise(r => setTimeout(r, 1500)); continue; }
-    const ac = new AbortController();
-    let timer = setTimeout(() => ac.abort(), STALL_MS);
-    const startGot = got;
-    try {
-      const r = await fetch(url, { headers: got ? { Range: 'bytes=' + got + '-' } : {}, signal: ac.signal });
-      if (r.status !== 200 && r.status !== 206) throw new Error('HTTP ' + r.status);
-      if (got > 0 && r.status === 200) { got = 0; parts.length = 0; }   // 服务器忽略 Range：重来
-      const reader = r.body.getReader();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        parts.push(value); got += value.length; onBytes(value.length);
-        clearTimeout(timer); timer = setTimeout(() => ac.abort(), STALL_MS);
-      }
-    } catch (e) {
-      // 停滞超时 / 网络断：带着已收字节进下一轮续传
-    } finally { clearTimeout(timer); }
-    if (got > startGot) fails = 0; else fails++;
-    if (got < size) await new Promise(r => setTimeout(r, 800));
-  }
-  const out = new Uint8Array(got);
-  let off = 0;
-  for (const p of parts) { out.set(p, off); off += p.length; }
-  return out;
-}
-
-function fmtSpeed(bps) {
-  return bps >= 1048576 ? (bps / 1048576).toFixed(1) + 'MB/s' : Math.max(1, Math.round(bps / 1024)) + 'KB/s';
-}
-
 async function downloadAllOutputFiles() {
   if (!currentDetailId) return;
   const btn = document.getElementById('btnDlAll');
   if (!btn) return;
-  btn.disabled = true;
-  const restore = () => { btn.disabled = false; btn.textContent = '📦 打包下载(zip)'; };
   try {
     const { task: t } = await api('get_task', { task_id: currentDetailId });
-    // 小文件排前面：前几个几秒就下完，最慢的大文件在最后（进度不会一上来就卡住）
-    const files = (t.output_files || []).slice().sort((a, b) => (a.size || 0) - (b.size || 0));
-    if (!files.length) { toast('没有可下载的文件', true); restore(); return; }
-    const total = files.reduce((s, f) => s + (f.size || 0), 0);
-    btn.innerHTML = `<span class="spinner"></span> 获取链接...`;
-    const sign = async (paths) => {
-      const body = { access_code: accessCode, viewer: sysUserId || '', paths };
-      if (adminCode) body.admin_code = adminCode;
-      const res = await fetch(DL_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
-      return d.files || [];
-    };
-    const list = await sign(files.map(f => f.path));
-    if (!list.length) throw new Error('未获取到可下载链接');
-    const byPath = {};
-    for (const f of list) byPath[f.path] = f;
-    // 滚动窗口算实时速度；显示总进度（字节）而不是文件计数，慢网络下才看得出在动
-    let done = 0, winBytes = 0, winT = Date.now(), t0 = Date.now();
-    const setLabel = (i) => {
-      const now = Date.now();
-      let spd = 0;
-      if (now - winT >= 1000) { spd = winBytes / ((now - winT) / 1000); winBytes = 0; winT = now; }
-      btn.innerHTML = `<span class="spinner"></span> ${i + 1}/${list.length} · ${fmtSize(done)}/${fmtSize(total)}${spd ? ' · ' + fmtSpeed(spd) : ''}`;
-    };
-    const entries = [], used = {};
-    for (let i = 0; i < list.length; i++) {
-      const f = list[i];
-      const sz = Number(f.size) || Number((files.find(x => x.path === f.path) || {}).size) || 0;
-      const mkUrl = async () => {
-        const arr = await sign([f.path]);       // 每次续传重新签，避免直链 15 分钟过期
-        if (!arr.length || !arr[0].url) throw new Error('重新签名失败');
-        return arr[0].url;
-      };
-      const data = await dlResume(mkUrl, sz, (n) => { done += n; winBytes += n; setLabel(i); });
-      let nm = f.name;
-      if (used[nm]) {                            // 同名文件加序号，避免 zip 内条目重复
-        const dot = nm.lastIndexOf('.');
-        nm = dot > 0 ? `${nm.slice(0, dot)}(${used[nm]})${nm.slice(dot)}` : `${nm}(${used[nm]})`;
-      }
-      used[f.name] = (used[f.name] || 0) + 1;
-      entries.push({ name: nm, data });
+    const files = t.output_files || [];
+    if (!files.length) { toast('没有可下载的文件', true); return; }
+    btn.disabled = true;
+    for (let i = 0; i < files.length; i++) {
+      btn.innerHTML = `<span class="spinner"></span> 下载中 ${i+1}/${files.length}`;
+      // 用隐藏 iframe 逐个触发，避免多次 window.open 被浏览器拦截
+      const fr = document.createElement('iframe');
+      fr.style.display = 'none';
+      fr.src = buildDownloadUrl(files[i].path);
+      document.body.appendChild(fr);
+      setTimeout(() => fr.remove(), 60000);
+      if (i < files.length - 1) await new Promise(r => setTimeout(r, 1200));
     }
-    btn.innerHTML = `<span class="spinner"></span> 打包中...`;
-    const blob = makeZip(entries);
-    const day = String(t.created_at || '').slice(0, 10).replace(/-/g, '');
-    const zipName = `${t.template_type || '杂费加收'}_${day}_${currentDetailId.slice(0, 8)}.zip`;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = zipName;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 20000);
-    const el = Math.round((Date.now() - t0) / 1000);
-    const elStr = el >= 60 ? `${Math.floor(el / 60)}分${el % 60}秒` : `${el}秒`;
-    toast(`✅ 已打包 ${entries.length} 个文件（${fmtSize(total)}，耗时 ${elStr}）：${zipName}`);
-  } catch (e) {
-    toast('打包下载失败：' + e.message, true);
+    toast(`✅ 已触发全部 ${files.length} 个文件下载，请留意浏览器下载栏`);
+  } catch(e) {
+    toast('批量下载失败：' + e.message, true);
   }
-  restore();
-}
-
-// 零依赖 ZIP 打包（store 模式，不压缩）：公司网屏蔽了 cdnjs/jsdelivr/unpkg，
-// JSZip 之类的库根本加载不出来；xlsx 本身已是压缩包，store 不会明显增大体积。
-let _crcTable = null;
-function _crc32(buf) {
-  if (!_crcTable) {
-    _crcTable = new Uint32Array(256);
-    for (let n = 0; n < 256; n++) {
-      let c = n;
-      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-      _crcTable[n] = c >>> 0;
-    }
-  }
-  let crc = 0xFFFFFFFF;
-  for (let i = 0; i < buf.length; i++) crc = _crcTable[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
-  return (crc ^ 0xFFFFFFFF) >>> 0;
-}
-function makeZip(entries) {
-  const enc = new TextEncoder();
-  const parts = [], central = [];
-  const now = new Date();
-  const zTime = ((now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2)) & 0xFFFF;
-  const zDate = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xFFFF;
-  let offset = 0;
-  for (const e of entries) {
-    const nb = enc.encode(e.name), crc = _crc32(e.data), sz = e.data.length;
-    const lh = new Uint8Array(30 + nb.length), lv = new DataView(lh.buffer);
-    lv.setUint32(0, 0x04034b50, true);          // 本地文件头签名
-    lv.setUint16(4, 20, true);                  // 需要版本 2.0
-    lv.setUint16(6, 0x0800, true);              // bit11：文件名为 UTF-8
-    lv.setUint16(8, 0, true);                   // 压缩方法 0 = store
-    lv.setUint16(10, zTime, true); lv.setUint16(12, zDate, true);
-    lv.setUint32(14, crc, true);
-    lv.setUint32(18, sz, true); lv.setUint32(22, sz, true);
-    lv.setUint16(26, nb.length, true);
-    lh.set(nb, 30);
-    parts.push(lh, e.data);
-    const cd = new Uint8Array(46 + nb.length), cv = new DataView(cd.buffer);
-    cv.setUint32(0, 0x02014b50, true);          // 中央目录项签名
-    cv.setUint16(4, 20, true); cv.setUint16(6, 20, true);
-    cv.setUint16(8, 0x0800, true); cv.setUint16(10, 0, true);
-    cv.setUint16(12, zTime, true); cv.setUint16(14, zDate, true);
-    cv.setUint32(16, crc, true);
-    cv.setUint32(20, sz, true); cv.setUint32(24, sz, true);
-    cv.setUint16(28, nb.length, true);
-    cv.setUint32(42, offset, true);              // 对应本地头偏移
-    cd.set(nb, 46);
-    central.push(cd);
-    offset += lh.length + sz;
-  }
-  const cdSize = central.reduce((s, c) => s + c.length, 0);
-  const eocd = new Uint8Array(22), ev = new DataView(eocd.buffer);
-  ev.setUint32(0, 0x06054b50, true);
-  ev.setUint16(8, entries.length, true); ev.setUint16(10, entries.length, true);
-  ev.setUint32(12, cdSize, true); ev.setUint32(16, offset, true);
-  return new Blob([...parts, ...central, eocd], { type: 'application/zip' });
+  btn.disabled = false;
+  btn.textContent = '📥 全部下载';
 }
 
 // ---------- 登记系统授权（SSO免密：开链接自动登录成自己 → 书签回传token） ----------
@@ -1294,11 +1125,30 @@ const REG_URL = 'https://iterative-app-build.1d.alibaba-inc.com/#/query';
 // bookmarklet：从登记系统页面 localStorage 取 access_token，postMessage 回本门户
 const REG_BOOKMARKLET = "javascript:void((function(){try{var k=Object.keys(localStorage).find(function(k){return k.indexOf('auth-token')>-1||k.indexOf('supabase')>-1});if(!k){alert('未找到登录信息，请确保已登录登记系统');return}var v=JSON.parse(localStorage.getItem(k));var t=v.access_token||v.token;if(!t||t.indexOf('eyJ')!==0){alert('Token无效，请重新登录');return}if(window.opener){window.opener.postMessage({type:'registration_token',success:true,data:{access_token:t}},'*');document.title='\\u2705 \u5df2\u53d1\u9001';setTimeout(function(){window.close()},1000)}else{navigator.clipboard.writeText(t).then(function(){alert('Token\u5df2\u590d\u5236\uff0c\u8bf7\u56de\u95e8\u6237\u7c98\u8d34')}).catch(function(){prompt('\u8bf7\u624b\u52a8\u590d\u5236:',t)})}}catch(e){alert('\u9519\u8bef: '+e.message)}})())";
 
+function _isJwtExpired(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return true;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+    return Date.now() > (payload.exp - 60) * 1000;
+  } catch(e) { return true; }
+}
 function updateRegAuthStatus() {
   const el = document.getElementById('regAuthStatus');
   if (!el) return;
-  if (regAccessToken) { el.textContent = '✅ 已授权（用您自己的登记系统身份）'; el.className = 'ok'; }
-  else { el.textContent = '⚠ 未授权'; el.className = 'no'; }
+  if (!regAccessToken) { el.textContent = '⚠ 未授权'; el.className = 'no'; return; }
+  if (_isJwtExpired(regAccessToken)) {
+    el.textContent = '⚠ 授权已过期，请重新点"去授权"'; el.className = 'no';
+  } else {
+    try {
+      const parts = regAccessToken.split('.');
+      const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+      const remain = ((payload.exp * 1000 - Date.now()) / 3600000).toFixed(1);
+      el.textContent = `✅ 已授权（剩余 ${remain} 小时）`; el.className = 'ok';
+    } catch(e) {
+      el.textContent = '✅ 已授权'; el.className = 'ok';
+    }
+  }
 }
 function triggerRegAuth() {
   // 首次使用先提示设置书签
@@ -1328,6 +1178,15 @@ window.addEventListener('message', (e) => {
 });
 
 // ---------- 验证码提交 ----------
+// 换一张图形验证码：借用 tfa 通道发哨兵值，agent 收到后本地换图并回推新图
+async function refreshTfaCaptcha() {
+  try {
+    await api('submit_tfa', { task_id: currentDetailId, code: '__refresh__' });
+    toast('正在换一张验证码...');
+  } catch (e) {
+    toast('换图失败：' + e.message, true);
+  }
+}
 async function submitTfa() {
   const inp = document.getElementById('dTfaInput');
   const code = inp.value.trim();
