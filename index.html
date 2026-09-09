@@ -592,7 +592,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
       <div id="dOutWrap" style="display:none">
         <div class="sec-label">📥 结果文件 <span style="font-weight:400;color:var(--text-3)">（云端留存，随时可下载）</span>
           <span style="flex:1"></span>
-          <button class="btn btn-sm btn-dl" id="btnDlAll" style="display:none" onclick="downloadAllOutputFiles()">📥 全部下载</button>
+          <button class="btn btn-sm btn-dl" id="btnDlAll" style="display:none" onclick="downloadAllOutputFiles()">📦 打包下载(zip)</button>
         </div>
         <div class="out-files" id="dOut"></div>
       </div>
@@ -610,6 +610,8 @@ main.container { padding-top:24px; padding-bottom:60px; }
 
 <script>
 const API = 'https://apszyinnbbpsdqzchmuu.supabase.co/functions/v1/zafei-gateway/api';
+const PORTAL_VERSION = '20260908-zip-captcha';
+console.info('[zafei-portal] version', PORTAL_VERSION);
 const TYPES_ICON = { '':'📋','前后线加收':'🚚','提货费加收':'📦','仓储费加收':'🏭','单独报关费加收':'🛃','登记系统':'📝','凭证预登录':'🔑' };
 let accessCode = localStorage.getItem('portal_code') || '';
 let userName = localStorage.getItem('portal_name') || '';
@@ -1098,7 +1100,6 @@ document.getElementById('overlay').addEventListener('click', async e => {
 });
 
 // ---------- 批量下载全部输出文件 ----------
-// 下载统一走网关 GET 端点（302 → Storage 签名直链）；POST api('download') 已不再返回文件内容
 function buildDownloadUrl(path) {
   let u = API + '/download?path=' + encodeURIComponent(path)
         + '&access_code=' + encodeURIComponent(accessCode)
@@ -1106,31 +1107,144 @@ function buildDownloadUrl(path) {
   if (adminCode) u += '&admin_code=' + encodeURIComponent(adminCode);
   return u;
 }
+const DL_API = 'https://apszyinnbbpsdqzchmuu.supabase.co/functions/v1/zafei-dl';
+async function dlResume(makeUrl, size, onBytes) {
+  if (!size) {
+    const r = await fetch(await makeUrl());
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const buf = new Uint8Array(await r.arrayBuffer());
+    onBytes(buf.length); return buf;
+  }
+  const STALL_MS = 45000, MAX_FAIL = 8, parts = [];
+  let got = 0, fails = 0;
+  while (got < size) {
+    if (fails >= MAX_FAIL) throw new Error('网络持续中断，已重试多次仍失败');
+    let url;
+    try { url = await makeUrl(); }
+    catch (e) { fails++; await new Promise(r => setTimeout(r, 1500)); continue; }
+    const ac = new AbortController();
+    let timer = setTimeout(() => ac.abort(), STALL_MS);
+    const startGot = got;
+    try {
+      const r = await fetch(url, { headers: got ? { Range: 'bytes=' + got + '-' } : {}, signal: ac.signal });
+      if (r.status !== 200 && r.status !== 206) throw new Error('HTTP ' + r.status);
+      if (got > 0 && r.status === 200) { got = 0; parts.length = 0; }
+      const reader = r.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value); got += value.length; onBytes(value.length);
+        clearTimeout(timer); timer = setTimeout(() => ac.abort(), STALL_MS);
+      }
+    } catch (e) {
+      // 带着已收字节继续Range续传。
+    } finally { clearTimeout(timer); }
+    if (got > startGot) fails = 0; else fails++;
+    if (got < size) await new Promise(r => setTimeout(r, 800));
+  }
+  const out = new Uint8Array(got);
+  let off = 0;
+  for (const p of parts) { out.set(p, off); off += p.length; }
+  return out;
+}
+function fmtSpeed(bps) {
+  return bps >= 1048576 ? (bps / 1048576).toFixed(1) + 'MB/s' : Math.max(1, Math.round(bps / 1024)) + 'KB/s';
+}
 async function downloadAllOutputFiles() {
   if (!currentDetailId) return;
   const btn = document.getElementById('btnDlAll');
   if (!btn) return;
+  btn.disabled = true;
+  const restore = () => { btn.disabled = false; btn.textContent = '📦 打包下载(zip)'; };
   try {
     const { task: t } = await api('get_task', { task_id: currentDetailId });
-    const files = t.output_files || [];
-    if (!files.length) { toast('没有可下载的文件', true); return; }
-    btn.disabled = true;
-    for (let i = 0; i < files.length; i++) {
-      btn.innerHTML = `<span class="spinner"></span> 下载中 ${i+1}/${files.length}`;
-      // 用隐藏 iframe 逐个触发，避免多次 window.open 被浏览器拦截
-      const fr = document.createElement('iframe');
-      fr.style.display = 'none';
-      fr.src = buildDownloadUrl(files[i].path);
-      document.body.appendChild(fr);
-      setTimeout(() => fr.remove(), 60000);
-      if (i < files.length - 1) await new Promise(r => setTimeout(r, 1200));
+    const files = (t.output_files || []).slice().sort((a, b) => (a.size || 0) - (b.size || 0));
+    if (!files.length) { toast('没有可下载的文件', true); restore(); return; }
+    const total = files.reduce((s, f) => s + (f.size || 0), 0);
+    btn.innerHTML = `<span class="spinner"></span> 获取链接...`;
+    const sign = async (paths) => {
+      const body = { access_code: accessCode, viewer: sysUserId || '', paths };
+      if (adminCode) body.admin_code = adminCode;
+      const res = await fetch(DL_API, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || ('HTTP ' + res.status));
+      return d.files || [];
+    };
+    const list = await sign(files.map(f => f.path));
+    if (!list.length) throw new Error('未获取到可下载链接');
+    let done = 0, winBytes = 0, winT = Date.now(), t0 = Date.now();
+    const setLabel = (i) => {
+      const now = Date.now(); let spd = 0;
+      if (now - winT >= 1000) { spd = winBytes / ((now - winT) / 1000); winBytes = 0; winT = now; }
+      btn.innerHTML = `<span class="spinner"></span> ${i+1}/${list.length} · ${fmtSize(done)}/${fmtSize(total)}${spd ? ' · ' + fmtSpeed(spd) : ''}`;
+    };
+    const entries = [], used = {};
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i];
+      const sz = Number(f.size) || Number((files.find(x => x.path === f.path) || {}).size) || 0;
+      const mkUrl = async () => {
+        const arr = await sign([f.path]);
+        if (!arr.length || !arr[0].url) throw new Error('重新签名失败');
+        return arr[0].url;
+      };
+      const data = await dlResume(mkUrl, sz, n => { done += n; winBytes += n; setLabel(i); });
+      let nm = f.name;
+      if (used[nm]) {
+        const dot = nm.lastIndexOf('.');
+        nm = dot > 0 ? `${nm.slice(0,dot)}(${used[nm]})${nm.slice(dot)}` : `${nm}(${used[nm]})`;
+      }
+      used[f.name] = (used[f.name] || 0) + 1;
+      entries.push({ name:nm, data });
     }
-    toast(`✅ 已触发全部 ${files.length} 个文件下载，请留意浏览器下载栏`);
+    btn.innerHTML = `<span class="spinner"></span> 打包中...`;
+    const blob = makeZip(entries);
+    const day = String(t.created_at || '').slice(0,10).replace(/-/g,'');
+    const zipName = `${t.template_type || '杂费加收'}_${day}_${currentDetailId.slice(0,8)}.zip`;
+    const a = document.createElement('a');
+    const blobUrl = URL.createObjectURL(blob);
+    a.href = blobUrl; a.download = zipName; a.style.display = 'none';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 20000);
+    const elapsed = Math.round((Date.now() - t0) / 1000);
+    const elapsedText = elapsed >= 60 ? `${Math.floor(elapsed/60)}分${elapsed%60}秒` : `${elapsed}秒`;
+    toast(`✅ 已打包 ${entries.length} 个文件（${fmtSize(total)}，耗时 ${elapsedText}）：${zipName}`);
   } catch(e) {
-    toast('批量下载失败：' + e.message, true);
+    toast('打包下载失败：' + e.message, true);
   }
-  btn.disabled = false;
-  btn.textContent = '📥 全部下载';
+  restore();
+}
+let _crcTable = null;
+function _crc32(buf) {
+  if (!_crcTable) {
+    _crcTable = new Uint32Array(256);
+    for (let n=0;n<256;n++) { let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); _crcTable[n]=c>>>0; }
+  }
+  let crc=0xFFFFFFFF;
+  for(let i=0;i<buf.length;i++) crc=_crcTable[(crc^buf[i])&0xFF]^(crc>>>8);
+  return (crc^0xFFFFFFFF)>>>0;
+}
+function makeZip(entries) {
+  const enc=new TextEncoder(), parts=[], central=[], now=new Date();
+  const zTime=((now.getHours()<<11)|(now.getMinutes()<<5)|Math.floor(now.getSeconds()/2))&0xFFFF;
+  const zDate=(((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate())&0xFFFF;
+  let offset=0;
+  for(const e of entries) {
+    const nb=enc.encode(e.name), crc=_crc32(e.data), sz=e.data.length;
+    const lh=new Uint8Array(30+nb.length), lv=new DataView(lh.buffer);
+    lv.setUint32(0,0x04034b50,true); lv.setUint16(4,20,true); lv.setUint16(6,0x0800,true); lv.setUint16(8,0,true);
+    lv.setUint16(10,zTime,true); lv.setUint16(12,zDate,true); lv.setUint32(14,crc,true);
+    lv.setUint32(18,sz,true); lv.setUint32(22,sz,true); lv.setUint16(26,nb.length,true); lh.set(nb,30);
+    parts.push(lh,e.data);
+    const cd=new Uint8Array(46+nb.length), cv=new DataView(cd.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true); cv.setUint16(8,0x0800,true);
+    cv.setUint16(10,0,true); cv.setUint16(12,zTime,true); cv.setUint16(14,zDate,true); cv.setUint32(16,crc,true);
+    cv.setUint32(20,sz,true); cv.setUint32(24,sz,true); cv.setUint16(28,nb.length,true); cv.setUint32(42,offset,true); cd.set(nb,46);
+    central.push(cd); offset += lh.length + sz;
+  }
+  const cdSize=central.reduce((s,c)=>s+c.length,0), eocd=new Uint8Array(22), ev=new DataView(eocd.buffer);
+  ev.setUint32(0,0x06054b50,true); ev.setUint16(8,entries.length,true); ev.setUint16(10,entries.length,true);
+  ev.setUint32(12,cdSize,true); ev.setUint32(16,offset,true);
+  return new Blob([...parts,...central,eocd],{type:'application/zip'});
 }
 
 // ---------- 登记系统授权（SSO免密：开链接自动登录成自己 → 书签回传token） ----------
