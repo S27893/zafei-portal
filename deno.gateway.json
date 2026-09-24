@@ -4,6 +4,8 @@
     "include": [
       "public",
       "main.ts"
-    ]
+    ],
+    "org": "zafei-porta",
+    "app": "zafei-gateway"
   }
 }

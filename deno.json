@@ -1,11 +1,19 @@
 {
   "tasks": {
-    "start": "deno run -A --watch deno_serve.ts"
+    "start": "deno run -A --watch main.ts"
   },
   "deploy": {
     "entrypoint": "deno_serve.ts",
     "include": [
       "public"
-    ]
+    ],
+    "org": "zafei-porta",
+    "app": "zafei-portal"
   }
 }
+
+
+
+
+
+
