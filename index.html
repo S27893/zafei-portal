@@ -1146,7 +1146,7 @@ function buildDownloadUrl(path) {
   if (adminCode) u += '&admin_code=' + encodeURIComponent(adminCode);
   return u;
 }
-const DL_API = 'https://apszyinnbbpsdqzchmuu.supabase.co/functions/v1/zafei-dl';
+const DL_API = 'https://zafei-gateway.zafei-porta.deno.net/zafei-dl';
 async function dlResume(makeUrl, size, onBytes) {
   if (!size) {
     const r = await fetch(await makeUrl());
