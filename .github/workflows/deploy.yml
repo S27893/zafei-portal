@@ -16,3 +16,7 @@ jobs:
       - run: deno deploy --org zafei-porta --app zafei-portal --prod --json --non-interactive
         env:
           DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+      - name: Deploy relay gateway (zafei-gateway)
+        run: deno deploy --config deno.gateway.json --org zafei-porta --app zafei-gateway --prod --json --non-interactive
+        env:
+          DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}

@@ -612,7 +612,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
 <div id="toast"></div>
 
 <script>
-const API = 'https://apszyinnbbpsdqzchmuu.supabase.co/functions/v1/zafei-gateway/api';
+const API = 'https://zafei-gateway.zafei-porta.deno.net/api';
 const PORTAL_VERSION = '20260908-zip-captcha';
 console.info('[zafei-portal] version', PORTAL_VERSION);
 const TYPES_ICON = { '':'📋','前后线加收':'🚚','提货费加收':'📦','仓储费加收':'🏭','单独报关费加收':'🛃','登记系统':'📝','凭证预登录':'🔑' };
@@ -1146,7 +1146,7 @@ function buildDownloadUrl(path) {
   if (adminCode) u += '&admin_code=' + encodeURIComponent(adminCode);
   return u;
 }
-const DL_API = 'https://apszyinnbbpsdqzchmuu.supabase.co/functions/v1/zafei-dl';
+const DL_API = 'https://zafei-gateway.zafei-porta.deno.net/zafei-dl';
 async function dlResume(makeUrl, size, onBytes) {
   if (!size) {
     const r = await fetch(await makeUrl());
