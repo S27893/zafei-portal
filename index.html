@@ -170,6 +170,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
   background:var(--info-soft); border:1px solid var(--info-border); font-size:13px; color:var(--text-2);
 }
 .customs-range .cr-title { font-weight:700; color:var(--info); margin-bottom:6px; }
+.customs-range .cr-autohint { font-weight:600; color:var(--info); margin-bottom:6px; }
 .customs-range .cr-desc { line-height:1.7; margin-bottom:10px; }
 .customs-range .cr-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .customs-range .cr-row label { font-weight:600; }
@@ -508,6 +509,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
       </div>
       <div class="customs-range" id="customsRangeBox">
         <div class="cr-title">🛃 一般贸易出口日期区间（单独报关费 / 续页费）</div>
+        <div class="cr-autohint" id="customsRangeAutoHint" style="display:none">已根据上传的文件名自动识别为一般贸易数据（即使板块选的是"全部类型"）。</div>
         <div class="cr-desc">
           请选择本次提取的出口日期起止范围：所选区间内的记录将<b>全量提取</b>，系统会自动补查<b>上次所选区间</b>里新增的单号。留空则按默认周提取。
         </div>
@@ -651,6 +653,8 @@ let adminCode = localStorage.getItem('portal_admin') || '';       // 管理员�
 let regAccessToken = '';                                          // 登记系统授权token（sessionStorage按账号）
 let selectedType = '';
 let pickedFiles = [];
+let customsFileDetected = false;  // 上传文件名识别为一般贸易（单独报关/报关/一般贸易）
+const CUSTOMS_KEYWORDS = ['单独报关', '报关', '一般贸易'];
 let listTimer = null, detailTimer = null, currentDetailId = null;
 
 // ---------- 基础 ----------
@@ -814,11 +818,8 @@ document.getElementById('typeGrid').addEventListener('click', (e) => {
   document.getElementById('dropzone').style.display = isReg ? 'none' : '';
   document.getElementById('fileList').style.display = isReg ? 'none' : '';
   if (isReg) updateRegAuthStatus();
-  // 一般贸易（单独报关费/续页费）：显示出口日期区间选择并预填本周
-  const isCustoms = selectedType === '单独报关费加收';
-  const crBox = document.getElementById('customsRangeBox');
-  crBox.style.display = isCustoms ? 'block' : 'none';
-  if (isCustoms) initCustomsRange();
+  // 一般贸易（单独报关费/续页费）：按板块或已选文件名决定是否显示出口日期区间
+  updateCustomsBox();
 });
 
 // 计算本周一~本周五（YYYY-MM-DD）作为出口日期区间默认值
@@ -837,6 +838,19 @@ function initCustomsRange() {
   if (!sEl.value) sEl.value = s;
   if (!eEl.value) eEl.value = e;
   document.getElementById('customsRangeErr').style.display = 'none';
+}
+// 已选文件名是否命中一般贸易关键词（与后端 app.py is_customs 文件名识别对齐）
+function _detectCustomsFiles() {
+  return pickedFiles.some(f => CUSTOMS_KEYWORDS.some(k => (f.name || '').indexOf(k) !== -1));
+}
+// 板块为"单独报关费加收"或文件名识别为一般贸易时，显示出口日期区间框
+function updateCustomsBox() {
+  customsFileDetected = _detectCustomsFiles();
+  const show = selectedType === '单独报关费加收' || customsFileDetected;
+  document.getElementById('customsRangeBox').style.display = show ? 'block' : 'none';
+  const hint = document.getElementById('customsRangeAutoHint');
+  if (hint) hint.style.display = (show && selectedType !== '单独报关费加收') ? 'block' : 'none';
+  if (show) initCustomsRange();
 }
 
 // ---------- 文件选择 ----------
@@ -862,6 +876,7 @@ function renderFiles() {
   document.getElementById('fileList').innerHTML = pickedFiles.map((f,i) =>
     `<div class="file-item">📄 <span class="fname">${esc(f.name)}</span><span class="fsize">${fmtSize(f.size)}</span>
      <button class="rm" data-rm="${i}" title="移除">✕</button></div>`).join('');
+  updateCustomsBox();  // 文件名变化后重新判定是否显示出口日期区间框
 }
 document.getElementById('fileList').addEventListener('click', e => {
   const b = e.target.closest('[data-rm]'); if (b) removeFile(+b.dataset.rm);
@@ -885,7 +900,8 @@ async function submitTask() {
   if (isReg && !regAccessToken) { toast('请先在下方点"去授权"，用您自己的登记系统身份授权', true); return; }
   if (isReg && _isJwtExpired(regAccessToken)) { toast('登记系统授权已过期，请重新点"去授权"后再提交', true); return; }
   // 一般贸易出口日期区间校验（可留空=按默认周；填一个或起止颠倒则拦截）
-  const isCustoms = selectedType === '单独报关费加收';
+  // 触发条件：板块为"单独报关费加收" 或 已选文件名识别为一般贸易（含"全部类型"场景）
+  const isCustoms = selectedType === '单独报关费加收' || _detectCustomsFiles();
   let customsStart = '', customsEnd = '';
   if (isCustoms) {
     customsStart = document.getElementById('customsRangeStart').value;
