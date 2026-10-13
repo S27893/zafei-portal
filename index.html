@@ -164,6 +164,21 @@ main.container { padding-top:24px; padding-bottom:60px; }
 }
 .reg-bm-setup a { color:var(--primary); }
 
+/* 一般贸易出口日期区间选择（选中"单独报关费"板块时显示） */
+.customs-range {
+  display:none; margin-bottom:14px; padding:12px 15px; border-radius:var(--radius-sm);
+  background:var(--info-soft); border:1px solid var(--info-border); font-size:13px; color:var(--text-2);
+}
+.customs-range .cr-title { font-weight:700; color:var(--info); margin-bottom:6px; }
+.customs-range .cr-desc { line-height:1.7; margin-bottom:10px; }
+.customs-range .cr-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.customs-range .cr-row label { font-weight:600; }
+.customs-range .cr-row input[type=date] {
+  padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px;
+  background:var(--surface); color:inherit;
+}
+.customs-range .cr-err { display:none; margin-top:8px; color:var(--danger); font-size:12px; font-weight:600; }
+
 /* 处理统计卡片 */
 .stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:16px; }
 @media (max-width:560px){ .stat-grid { grid-template-columns:repeat(2,1fr); } }
@@ -491,6 +506,19 @@ main.container { padding-top:24px; padding-bottom:60px; }
           <a href="javascript:void(0)" onclick="this.parentElement.style.display='none';localStorage.setItem('portal_reg_bm_setup','1')" style="margin-left:8px">不再提示</a>
         </div>
       </div>
+      <div class="customs-range" id="customsRangeBox">
+        <div class="cr-title">🛃 一般贸易出口日期区间（单独报关费 / 续页费）</div>
+        <div class="cr-desc">
+          请选择本次提取的出口日期起止范围：所选区间内的记录将<b>全量提取</b>，系统会自动补查<b>上次所选区间</b>里新增的单号。留空则按默认周提取。
+        </div>
+        <div class="cr-row">
+          <label for="customsRangeStart">开始日期</label>
+          <input type="date" id="customsRangeStart">
+          <label for="customsRangeEnd">结束日期</label>
+          <input type="date" id="customsRangeEnd">
+        </div>
+        <div class="cr-err" id="customsRangeErr"></div>
+      </div>
       <div class="dropzone" id="dropzone">
         <div style="font-size:26px">📂</div>
         <div class="big">点击选择或拖拽 Excel 文件到此处</div>
@@ -786,7 +814,30 @@ document.getElementById('typeGrid').addEventListener('click', (e) => {
   document.getElementById('dropzone').style.display = isReg ? 'none' : '';
   document.getElementById('fileList').style.display = isReg ? 'none' : '';
   if (isReg) updateRegAuthStatus();
+  // 一般贸易（单独报关费/续页费）：显示出口日期区间选择并预填本周
+  const isCustoms = selectedType === '单独报关费加收';
+  const crBox = document.getElementById('customsRangeBox');
+  crBox.style.display = isCustoms ? 'block' : 'none';
+  if (isCustoms) initCustomsRange();
 });
+
+// 计算本周一~本周五（YYYY-MM-DD）作为出口日期区间默认值
+function _currentWeekRange() {
+  const now = new Date();
+  const day = (now.getDay() + 6) % 7; // 周一=0
+  const monday = new Date(now); monday.setDate(now.getDate() - day);
+  const friday = new Date(monday); friday.setDate(monday.getDate() + 4);
+  const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  return [fmt(monday), fmt(friday)];
+}
+function initCustomsRange() {
+  const [s, e] = _currentWeekRange();
+  const sEl = document.getElementById('customsRangeStart');
+  const eEl = document.getElementById('customsRangeEnd');
+  if (!sEl.value) sEl.value = s;
+  if (!eEl.value) eEl.value = e;
+  document.getElementById('customsRangeErr').style.display = 'none';
+}
 
 // ---------- 文件选择 ----------
 const dz = document.getElementById('dropzone');
@@ -833,6 +884,19 @@ async function submitTask() {
   if (!creds.sys_password) { toast('登录凭证已失效，请退出后重新进入门户', true); return; }
   if (isReg && !regAccessToken) { toast('请先在下方点"去授权"，用您自己的登记系统身份授权', true); return; }
   if (isReg && _isJwtExpired(regAccessToken)) { toast('登记系统授权已过期，请重新点"去授权"后再提交', true); return; }
+  // 一般贸易出口日期区间校验（可留空=按默认周；填一个或起止颠倒则拦截）
+  const isCustoms = selectedType === '单独报关费加收';
+  let customsStart = '', customsEnd = '';
+  if (isCustoms) {
+    customsStart = document.getElementById('customsRangeStart').value;
+    customsEnd = document.getElementById('customsRangeEnd').value;
+    const errEl = document.getElementById('customsRangeErr');
+    let msg = '';
+    if ((customsStart && !customsEnd) || (!customsStart && customsEnd)) msg = '请完整选择出口日期起止范围（或两者都留空按默认周）';
+    else if (customsStart && customsEnd && customsStart > customsEnd) msg = '开始日期不能晚于结束日期';
+    if (msg) { errEl.textContent = msg; errEl.style.display = 'block'; toast(msg, true); return; }
+    errEl.style.display = 'none';
+  }
   const btn = document.getElementById('submitBtn');
   const note = document.getElementById('submitNote');
   btn.disabled = true;
@@ -840,6 +904,10 @@ async function submitTask() {
     btn.innerHTML = '<span class="spinner"></span> 创建任务...';
     const payload = Object.assign({ template_type: selectedType, created_by: userName }, creds);
     if (isReg) payload.reg_access_token = regAccessToken;
+    if (isCustoms && customsStart && customsEnd) {
+      payload.customs_range_start = customsStart;
+      payload.customs_range_end = customsEnd;
+    }
     const { task_id } = await api('create_task', payload);
     for (let i = 0; i < pickedFiles.length; i++) {
       const f = pickedFiles[i];
