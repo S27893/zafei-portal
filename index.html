@@ -148,7 +148,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
 .card-body { padding:22px; }
 
 /* 板块选择 */
-.type-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:18px; }
+.type-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:10px; margin-bottom:18px; }
 @media (max-width:760px){ .type-grid { grid-template-columns:repeat(3,1fr); } }
 .reg-note {
   display:none; margin-bottom:14px; padding:12px 15px; border-radius:var(--radius-sm);
@@ -484,6 +484,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
         <button class="type-btn" data-type="提货费加收"><span class="ico">📦</span><span class="name">提货费加收</span></button>
         <button class="type-btn" data-type="仓储费加收"><span class="ico">🏭</span><span class="name">仓储费加收</span></button>
         <button class="type-btn" data-type="单独报关费加收"><span class="ico">🛃</span><span class="name">单独报关费</span></button>
+        <button class="type-btn" data-type="一件代发加收"><span class="ico">🛒</span><span class="name">一件代发</span></button>
         <button class="type-btn" data-type="登记系统"><span class="ico">📝</span><span class="name">登记系统</span></button>
       </div>
       <div class="cred-box">
@@ -645,7 +646,7 @@ main.container { padding-top:24px; padding-bottom:60px; }
 const API = 'https://apszyinnbbpsdqzchmuu.supabase.co/functions/v1/zafei-gateway/api';
 const PORTAL_VERSION = '20260908-zip-captcha';
 console.info('[zafei-portal] version', PORTAL_VERSION);
-const TYPES_ICON = { '':'📋','前后线加收':'🚚','提货费加收':'📦','仓储费加收':'🏭','单独报关费加收':'🛃','登记系统':'📝','凭证预登录':'🔑' };
+const TYPES_ICON = { '':'📋','前后线加收':'🚚','提货费加收':'📦','仓储费加收':'🏭','单独报关费加收':'🛃','一件代发加收':'🛒','登记系统':'📝','凭证预登录':'🔑' };
 let accessCode = localStorage.getItem('portal_code') || '';
 let userName = localStorage.getItem('portal_name') || '';
 let sysUserId = localStorage.getItem('portal_sys_user') || '';   // 数据隔离身份（XMS账号）
